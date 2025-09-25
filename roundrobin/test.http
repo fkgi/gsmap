@@ -1,0 +1,22 @@
+#@url=http://192.168.56.109:8081
+@url=http://10.255.200.18:8080
+
+###
+POST {{url}}/mapmsg/v1/ShortMsgGateway/v3
+content-type: application/json
+
+{
+    "cdpa": {
+        "tt": 0,
+        "ssn": "msc",
+        "gt": {
+            "np":"telephony", "na":"international", "digits": "999900010001"
+        }
+    },
+    "RoutingInfoForSM-Arg": {
+        "id": 1,
+        "msisdn": {"np":"telephony", "na":"international", "digits": "819099990001"},
+        "sm-RP-PRI": false,
+        "serviceCenterAddress": {"np":"telephony", "na":"international", "digits": "999900001111"}
+    }
+}
