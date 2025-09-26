@@ -8,14 +8,7 @@ import (
 	"strings"
 
 	"github.com/fkgi/gsmap"
-	"github.com/fkgi/gsmap/common"
 	"github.com/fkgi/teldata"
-)
-
-const (
-	SubscriberDataMngt1 gsmap.AppContext = 0x0004000001001001
-	SubscriberDataMngt2 gsmap.AppContext = 0x0004000001001002
-	SubscriberDataMngt3 gsmap.AppContext = 0x0004000001001003
 )
 
 /*
@@ -120,18 +113,18 @@ InsertSubscriberDataArg operation arg.
 type InsertSubscriberDataArg struct {
 	InvokeID int8 `json:"id"`
 
-	IMSI                     teldata.IMSI         `json:"imsi,omitempty"`
-	MSISDN                   common.AddressString `json:"msisdn,omitempty"`
-	Category                 byte                 `json:"category,omitempty"`
-	SubscriberStatus         subscriberStatus     `json:"subscriberStatus,omitempty"`
-	BsList                   []uint8              `json:"bearerServiceList,omitempty"`
-	TsList                   []uint8              `json:"teleserviceList,omitempty"`
-	ProvisionedSS            ssInfoList           `json:"provisionedSS,omitempty"`
-	OdbData                  odbData              `json:"odb-Data,omitempty"`
-	RoamingRestriction       bool                 `json:"roamingRestrictionDueToUnsupportedFeature,omitempty"`
-	RegionalSubscriptionData []data16             `json:"regionalSubscriptionData,omitempty"`
-	VbsSubscriptionData      []vBroadcastData     `json:"vbsSubscriptionData,omitempty"`
-	VgcsSubscriptionData     []vGroupCallData     `json:"vgcsSubscriptionData,omitempty"`
+	IMSI                     teldata.IMSI        `json:"imsi,omitempty"`
+	MSISDN                   gsmap.AddressString `json:"msisdn,omitempty"`
+	Category                 byte                `json:"category,omitempty"`
+	SubscriberStatus         subscriberStatus    `json:"subscriberStatus,omitempty"`
+	BsList                   []uint8             `json:"bearerServiceList,omitempty"`
+	TsList                   []uint8             `json:"teleserviceList,omitempty"`
+	ProvisionedSS            ssInfoList          `json:"provisionedSS,omitempty"`
+	OdbData                  odbData             `json:"odb-Data,omitempty"`
+	RoamingRestriction       bool                `json:"roamingRestrictionDueToUnsupportedFeature,omitempty"`
+	RegionalSubscriptionData []data16            `json:"regionalSubscriptionData,omitempty"`
+	VbsSubscriptionData      []vBroadcastData    `json:"vbsSubscriptionData,omitempty"`
+	VgcsSubscriptionData     []vGroupCallData    `json:"vgcsSubscriptionData,omitempty"`
 	// VlrCamelSubscriptionInfo VlrCamelSubsInfo     `json:"vlrCamelSubscriptionInfo,omitempty"`
 	// Extension ExtensionContainer `json:"extensionContainer,omitempty"`
 	NaeaPreferredCI *NAEAPreferredCI `json:"naea-PreferredCI,omitempty"`
@@ -240,8 +233,7 @@ func (InsertSubscriberDataArg) NewFromJSON(v []byte, id int8) (gsmap.Component, 
 		InvokeID *int8 `json:"id"`
 		InsertSubscriberDataArg
 	}{}
-	e := json.Unmarshal(v, &tmp)
-	if e != nil {
+	if e := json.Unmarshal(v, &tmp); e != nil {
 		return tmp.InsertSubscriberDataArg, e
 	}
 	c := tmp.InsertSubscriberDataArg
@@ -250,7 +242,7 @@ func (InsertSubscriberDataArg) NewFromJSON(v []byte, id int8) (gsmap.Component, 
 	} else {
 		c.InvokeID = *tmp.InvokeID
 	}
-	return c, e
+	return c, nil
 }
 
 func (isd InsertSubscriberDataArg) MarshalParam() []byte {
@@ -411,7 +403,7 @@ func (InsertSubscriberDataArg) Unmarshal(id int8, _ *int8, buf *bytes.Buffer) (g
 
 	// msisdn, context_specific(80) + primitive(00) + 1(01)
 	if t == 0x81 {
-		if isd.MSISDN, e = common.DecodeAddressString(v); e != nil {
+		if isd.MSISDN, e = gsmap.DecodeAddressString(v); e != nil {
 			return nil, e
 		}
 
@@ -583,7 +575,7 @@ func (InsertSubscriberDataArg) Unmarshal(id int8, _ *int8, buf *bytes.Buffer) (g
 
 	// extensionContainer, context_specific(80) + constructed(20) + 14(0e)
 	if t == 0xae {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return nil, e
 		}
 
@@ -815,8 +807,7 @@ func (InsertSubscriberDataRes) NewFromJSON(v []byte, id int8) (gsmap.Component, 
 		InvokeID *int8 `json:"id"`
 		InsertSubscriberDataRes
 	}{}
-	e := json.Unmarshal(v, &tmp)
-	if e != nil {
+	if e := json.Unmarshal(v, &tmp); e != nil {
 		return tmp.InsertSubscriberDataRes, e
 	}
 	c := tmp.InsertSubscriberDataRes
@@ -825,7 +816,7 @@ func (InsertSubscriberDataRes) NewFromJSON(v []byte, id int8) (gsmap.Component, 
 	} else {
 		c.InvokeID = *tmp.InvokeID
 	}
-	return c, e
+	return c, nil
 }
 
 func (isd InsertSubscriberDataRes) MarshalParam() []byte {
@@ -968,7 +959,7 @@ func (InsertSubscriberDataRes) Unmarshal(id int8, buf *bytes.Buffer) (gsmap.Retu
 
 	// extensionContainer, context_specific(80) + constructed(20) + 7(07)
 	if t == 0xa7 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return nil, e
 		}
 		/*
@@ -982,66 +973,3 @@ func (InsertSubscriberDataRes) Unmarshal(id int8, buf *bytes.Buffer) (gsmap.Retu
 
 	return isd, nil
 }
-
-/*
-deleteSubscriberData  OPERATION ::= {	--Timer m
-	ARGUMENT
-		DeleteSubscriberDataArg
-	RESULT
-		DeleteSubscriberDataRes -- optional
-	ERRORS {
-		dataMissing            |
-		unexpectedDataValue    |
-		unidentifiedSubscriber }
-	CODE	local:8 }
-*/
-
-/*
-DeleteSubscriberDataArg
-
-	DeleteSubscriberDataArg ::= SEQUENCE {
-		imsi                           [0]  IMSI,
-		basicServiceList               [1]  BasicServiceList       OPTIONAL,
-		-- The exception handling for reception of unsupported/not allocated basicServiceCodes is defined in clause 6.8.2
-		ss-List                        [2]  SS-List                OPTIONAL,
-		roamingRestrictionDueToUnsupportedFeature [4] NULL         OPTIONAL,
-		regionalSubscriptionIdentifier [5]  ZoneCode               OPTIONAL,
-		vbsGroupIndication             [7]  NULL                   OPTIONAL,
-		vgcsGroupIndication            [8]  NULL                   OPTIONAL,
-		camelSubscriptionInfoWithdraw  [9]  NULL                   OPTIONAL,
-		extensionContainer             [6]  ExtensionContainer     OPTIONAL,
-		...,
-		gprsSubscriptionDataWithdraw   [10] GPRSSubscriptionDataWithdraw OPTIONAL,
-		roamingRestrictedInSgsnDueToUnsuppportedFeature [11] NULL  OPTIONAL,
-		lsaInformationWithdraw         [12] LSAInformationWithdraw OPTIONAL,
-		gmlc-ListWithdraw              [13] NULL                   OPTIONAL,
-		istInformationWithdraw         [14] NULL                   OPTIONAL,
-		specificCSI-Withdraw           [15] SpecificCSI-Withdraw   OPTIONAL,
-		-- ^^^^^^ R99 ^^^^^^
-		chargingCharacteristicsWithdraw	[16] NULL              OPTIONAL,
-		stn-srWithdraw                  [17] NULL              OPTIONAL,
-		epsSubscriptionDataWithdraw     [18] EPS-SubscriptionDataWithdraw OPTIONAL,
-		apn-oi-replacementWithdraw      [19] NULL              OPTIONAL,
-		csg-SubscriptionDeleted         [20] NULL              OPTIONAL,
-		subscribedPeriodicTAU-RAU-TimerWithdraw	[22] NULL      OPTIONAL,
-		subscribedPeriodicLAU-TimerWithdraw     [23] NULL      OPTIONAL,
-		subscribed-vsrvccWithdraw       [21] NULL              OPTIONAL,
-		vplmn-Csg-SubscriptionDeleted   [24] NULL              OPTIONAL,
-		additionalMSISDN-Withdraw       [25] NULL              OPTIONAL,
-		cs-to-ps-SRVCC-Withdraw         [26] NULL              OPTIONAL,
-		imsiGroupIdList-Withdraw        [27] NULL              OPTIONAL,
-		userPlaneIntegrityProtectionWithdraw         [28] NULL OPTIONAL,
-		dl-Buffering-Suggested-Packet-Count-Withdraw [29] NULL OPTIONAL,
-		ue-UsageTypeWithdraw            [30] NULL              OPTIONAL,
-		reset-idsWithdraw               [31] NULL              OPTIONAL,
-		iab-OperationWithdraw           [32] NULL              OPTIONAL }
-*/
-
-/*
-DeleteSubscriberDataRes
-
-	DeleteSubscriberDataRes ::= SEQUENCE {
-		regionalSubscriptionResponse [0] RegionalSubscriptionResponse OPTIONAL,
-		extensionContainer               ExtensionContainer           OPTIONAL,
-		...}
-*/

@@ -2,7 +2,7 @@ package xua
 
 var (
 	AspUpNotify func(la, pa *SCTPAddr, e error)
-	AsUpNotify  func(ctx []uint32, e error)
+	AsUpNotify  func(ctx uint32, e error)
 	DunaNotify  func([]PointCode)
 	DavaNotify  func([]PointCode)
 	DaudNotify  func([]PointCode)

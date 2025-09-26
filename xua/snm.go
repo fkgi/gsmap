@@ -44,7 +44,7 @@ DUNA is Destination Unavailable message. (Message type = 0x01)
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 type DUNA struct {
-	ctx []uint32
+	ctx uint32
 	apc []PointCode
 	ssn uint8
 	smi uint8
@@ -60,7 +60,7 @@ func (m *DUNA) handleMessage(*ASP) {
 func (m *DUNA) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
 	case 0x0006: // Routing Context (Optional)
-		m.ctx, e = readRoutingContext(r, l)
+		m.ctx, e = readUint32(r, l)
 	case 0x0012: // Affeccted Point Code
 		m.apc, e = readAPC(r, l)
 	case 0x8003: // SSN (Optional)
@@ -108,7 +108,7 @@ DAVA is Destination Available message. (Message type = 0x02)
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 type DAVA struct {
-	ctx []uint32
+	ctx uint32
 	apc []PointCode
 	ssn uint8
 	smi uint8
@@ -124,7 +124,7 @@ func (m *DAVA) handleMessage(*ASP) {
 func (m *DAVA) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
 	case 0x0006: // Routing Context (Optional)
-		m.ctx, e = readRoutingContext(r, l)
+		m.ctx, e = readUint32(r, l)
 	case 0x0012: // Affected Point Code
 		m.apc, e = readAPC(r, l)
 	case 0x8003: // SSN (Optional)
@@ -172,7 +172,7 @@ DAUD is Destination State Audit message. (Message type = 0x03)
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 type DAUD struct {
-	ctx   []uint32
+	ctx   uint32
 	apc   []PointCode
 	ssn   uint8
 	cause uint16
@@ -191,9 +191,7 @@ func (m *DAUD) marshal() (uint8, uint8, []byte) {
 	buf := new(bytes.Buffer)
 
 	// Routing Context (Optional)
-	if len(m.ctx) != 0 {
-		writeRoutingContext(buf, m.ctx)
-	}
+	writeUint32(buf, 0x0006, m.ctx)
 
 	// Affected PC
 	writeAPC(buf, m.apc)
@@ -255,7 +253,7 @@ SCON is  Signalling Congestion message. (Message type = 0x04)
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 type SCON struct {
-	ctx        []uint32
+	ctx        uint32
 	apc        []PointCode
 	ssn        uint8
 	congestion uint32
@@ -272,7 +270,7 @@ func (m *SCON) handleMessage(*ASP) {
 func (m *SCON) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
 	case 0x0006: // Routing Context (Optional)
-		m.ctx, e = readRoutingContext(r, l)
+		m.ctx, e = readUint32(r, l)
 	case 0x0012: // Affected Point Code
 		m.apc, e = readAPC(r, l)
 	case 0x8003: // SSN (Optional)
@@ -319,7 +317,7 @@ DUPU is Destination User Part Unavailable. (Message type = 0x05)
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 type DUPU struct {
-	ctx   []uint32
+	ctx   uint32
 	apc   []PointCode
 	cause uint16
 	user  uint16
@@ -335,7 +333,7 @@ func (m *DUPU) handleMessage(*ASP) {
 func (m *DUPU) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
 	case 0x0006: // Routing Context (Optional)
-		m.ctx, e = readRoutingContext(r, l)
+		m.ctx, e = readUint32(r, l)
 	case 0x0012: // Affected Point Code
 		m.apc, e = readAPC(r, l)
 	case 0x010C: // Cause/User
@@ -383,7 +381,7 @@ DRST is Destination Restricted message. (Message type = 0x06)
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 type DRST struct {
-	ctx []uint32
+	ctx uint32
 	apc []PointCode
 	ssn uint8
 	smi uint8
@@ -399,7 +397,7 @@ func (m *DRST) handleMessage(*ASP) {
 func (m *DRST) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
 	case 0x0006: // Routing Context (Optional)
-		m.ctx, e = readRoutingContext(r, l)
+		m.ctx, e = readUint32(r, l)
 	case 0x0012: // Affected Point Code
 		m.apc, e = readAPC(r, l)
 	case 0x8003: // SSN (Optional)

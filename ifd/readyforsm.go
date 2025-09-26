@@ -8,14 +8,7 @@ import (
 	"strings"
 
 	"github.com/fkgi/gsmap"
-	"github.com/fkgi/gsmap/common"
 	"github.com/fkgi/teldata"
-)
-
-const (
-	MwdMngt1 gsmap.AppContext = 0x0004000001001801
-	MwdMngt2 gsmap.AppContext = 0x0004000001001802
-	MwdMngt3 gsmap.AppContext = 0x0004000001001803
 )
 
 /*
@@ -169,7 +162,7 @@ func (ReadyForSmArg) Unmarshal(id int8, _ *int8, buf *bytes.Buffer) (gsmap.Invok
 
 	// extensionContainer, universal(00) + constructed(20) + sequence(10)
 	if t == 0x30 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return nil, e
 		}
 		/*
@@ -254,7 +247,7 @@ func (ReadyForSmRes) Unmarshal(id int8, buf *bytes.Buffer) (gsmap.ReturnResultLa
 
 	// extensionContainer, universal(00) + constructed(20) + sequence(10)
 	if t == 0x30 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return nil, e
 		}
 	}

@@ -30,7 +30,6 @@ func readInfo(r io.ReadSeeker, l uint16) (v string, e error) {
 	v = string(d)
 	return
 }
-*/
 
 func writeRoutingContext(w io.Writer, cx []uint32) {
 	binary.Write(w, binary.BigEndian, uint16(0x0006))
@@ -42,7 +41,7 @@ func writeRoutingContext(w io.Writer, cx []uint32) {
 
 func readRoutingContext(r io.ReadSeeker, l uint16) (v []uint32, e error) {
 	if l%4 != 0 {
-		e = errors.New("invalid lenght of parameter")
+		e = errors.New("invalid length of parameter")
 	} else {
 		v = make([]uint32, l/4)
 		for i := range v {
@@ -53,6 +52,7 @@ func readRoutingContext(r io.ReadSeeker, l uint16) (v []uint32, e error) {
 	}
 	return
 }
+*/
 
 type PointCode struct {
 	mask byte
@@ -73,7 +73,7 @@ func writeAPC(w io.Writer, v []PointCode) {
 
 func readAPC(r io.ReadSeeker, l uint16) (v []PointCode, e error) {
 	if l%4 != 0 {
-		e = errors.New("invalid lenght of parameter")
+		e = errors.New("invalid length of parameter")
 	} else {
 		v = make([]PointCode, l/4)
 		for i := range v {
@@ -95,7 +95,7 @@ func writeUint32(w io.Writer, t uint16, v uint32) {
 
 func readUint32(r io.ReadSeeker, l uint16) (v uint32, e error) {
 	if l != 4 {
-		e = errors.New("invalid lenght of parameter")
+		e = errors.New("invalid length of parameter")
 	} else {
 		e = binary.Read(r, binary.BigEndian, &v)
 	}
@@ -110,7 +110,7 @@ func writeUint8(w io.Writer, t uint16, v uint8) {
 
 func readUint8(r io.ReadSeeker, l uint16) (v uint8, e error) {
 	if l != 4 {
-		e = errors.New("invalid lenght of parameter")
+		e = errors.New("invalid length of parameter")
 	} else if _, e = r.Seek(3, io.SeekCurrent); e == nil {
 		e = binary.Read(r, binary.BigEndian, &v)
 	}

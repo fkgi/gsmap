@@ -7,12 +7,6 @@ import (
 	"strings"
 
 	"github.com/fkgi/gsmap"
-	"github.com/fkgi/gsmap/common"
-)
-
-const (
-	ShortMsgAlert1 gsmap.AppContext = 0x0004000001001701
-	ShortMsgAlert2 gsmap.AppContext = 0x0004000001001702
 )
 
 /*
@@ -41,8 +35,8 @@ AlertServiceCentreWithoutResult operation arg.
 type AlertServiceCentreWithoutResult struct {
 	InvokeID int8 `json:"id"`
 
-	MSISDN     common.AddressString `json:"msisdn"`
-	CenterAddr common.AddressString `json:"serviceCentreAddress"`
+	MSISDN     gsmap.AddressString `json:"msisdn"`
+	CenterAddr gsmap.AddressString `json:"serviceCentreAddress"`
 }
 
 func (al AlertServiceCentreWithoutResult) String() string {
@@ -101,14 +95,14 @@ func (AlertServiceCentreWithoutResult) Unmarshal(id int8, _ *int8, buf *bytes.Bu
 	// msisdn, universal(00) + primitive(00) + octet_string(04)
 	if _, v, e := gsmap.ReadTLV(buf, 0x04); e != nil {
 		return nil, e
-	} else if al.MSISDN, e = common.DecodeAddressString(v); e != nil {
+	} else if al.MSISDN, e = gsmap.DecodeAddressString(v); e != nil {
 		return nil, e
 	}
 
 	// serviceCentreAddress, universal(00) + primitive(00) + octet_string(04)
 	if _, v, e := gsmap.ReadTLV(buf, 0x04); e != nil {
 		return nil, e
-	} else if al.CenterAddr, e = common.DecodeAddressString(v); e != nil {
+	} else if al.CenterAddr, e = gsmap.DecodeAddressString(v); e != nil {
 		return nil, e
 	}
 
@@ -157,8 +151,8 @@ AlertServiceCentreArg operation arg.
 type AlertServiceCentreArg struct {
 	InvokeID int8 `json:"id"`
 
-	MSISDN     common.AddressString `json:"msisdn"`
-	CenterAddr common.AddressString `json:"serviceCentreAddress"`
+	MSISDN     gsmap.AddressString `json:"msisdn"`
+	CenterAddr gsmap.AddressString `json:"serviceCentreAddress"`
 }
 
 func (al AlertServiceCentreArg) String() string {
@@ -217,14 +211,14 @@ func (AlertServiceCentreArg) Unmarshal(id int8, _ *int8, buf *bytes.Buffer) (gsm
 	// msisdn, universal(00) + primitive(00) + octet_string(04)
 	if _, v, e := gsmap.ReadTLV(buf, 0x04); e != nil {
 		return nil, e
-	} else if al.MSISDN, e = common.DecodeAddressString(v); e != nil {
+	} else if al.MSISDN, e = gsmap.DecodeAddressString(v); e != nil {
 		return nil, e
 	}
 
 	// serviceCentreAddress, universal(00) + primitive(00) + octet_string(04)
 	if _, v, e := gsmap.ReadTLV(buf, 0x04); e != nil {
 		return nil, e
-	} else if al.CenterAddr, e = common.DecodeAddressString(v); e != nil {
+	} else if al.CenterAddr, e = gsmap.DecodeAddressString(v); e != nil {
 		return nil, e
 	}
 

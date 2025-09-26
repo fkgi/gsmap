@@ -8,13 +8,7 @@ import (
 	"strings"
 
 	"github.com/fkgi/gsmap"
-	"github.com/fkgi/gsmap/common"
 	"github.com/fkgi/teldata"
-)
-
-const (
-	MsPurging2 gsmap.AppContext = 0x0004000001001b02
-	MsPurging3 gsmap.AppContext = 0x0004000001001b03
 )
 
 /*
@@ -57,9 +51,9 @@ PurgeMSArg
 type PurgeMSArg struct {
 	InvokeID int8 `json:"id"`
 
-	IMSI       teldata.IMSI         `json:"imsi"`
-	VlrNumber  common.AddressString `json:"vlr-Number,omitempty"`
-	SgsnNumber common.AddressString `json:"sgsn-Number,omitempty"`
+	IMSI       teldata.IMSI        `json:"imsi"`
+	VlrNumber  gsmap.AddressString `json:"vlr-Number,omitempty"`
+	SgsnNumber gsmap.AddressString `json:"sgsn-Number,omitempty"`
 	// Extension ExtensionContainer `json:"extensionContainer,omitempty"`
 }
 
@@ -81,9 +75,9 @@ func (pm PurgeMSArg) MarshalJSON() ([]byte, error) {
 	j := struct {
 		InvokeID int8 `json:"id"`
 
-		IMSI       teldata.IMSI          `json:"imsi"`
-		VlrNumber  *common.AddressString `json:"vlr-Number,omitempty"`
-		SgsnNumber *common.AddressString `json:"sgsn-Number,omitempty"`
+		IMSI       teldata.IMSI         `json:"imsi"`
+		VlrNumber  *gsmap.AddressString `json:"vlr-Number,omitempty"`
+		SgsnNumber *gsmap.AddressString `json:"sgsn-Number,omitempty"`
 	}{
 		InvokeID: pm.InvokeID,
 		IMSI:     pm.IMSI}
@@ -167,7 +161,7 @@ func (PurgeMSArg) Unmarshal(id int8, _ *int8, buf *bytes.Buffer) (gsmap.Invoke, 
 
 	// vlr-Number, context_specific(80) + primitive(00) + 0(00)
 	if t == 0x80 {
-		if pm.VlrNumber, e = common.DecodeAddressString(v); e != nil {
+		if pm.VlrNumber, e = gsmap.DecodeAddressString(v); e != nil {
 			return nil, e
 		}
 
@@ -180,7 +174,7 @@ func (PurgeMSArg) Unmarshal(id int8, _ *int8, buf *bytes.Buffer) (gsmap.Invoke, 
 
 	// sgsn-Number, context_specific(80) + primitive(00) + 1(01)
 	if t == 0x81 {
-		if pm.SgsnNumber, e = common.DecodeAddressString(v); e != nil {
+		if pm.SgsnNumber, e = gsmap.DecodeAddressString(v); e != nil {
 			return nil, e
 		}
 
@@ -193,7 +187,7 @@ func (PurgeMSArg) Unmarshal(id int8, _ *int8, buf *bytes.Buffer) (gsmap.Invoke, 
 
 	// extensionContainer, universal(00) + constructed(20) + sequence(10)
 	if t == 0x30 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return nil, e
 		}
 	}
@@ -320,7 +314,7 @@ func (PurgeMSRes) Unmarshal(id int8, buf *bytes.Buffer) (gsmap.ReturnResultLast,
 
 	// extensionContainer, universal(00) + constructed(20) + sequence(10)
 	if t == 0x30 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return nil, e
 		}
 	}

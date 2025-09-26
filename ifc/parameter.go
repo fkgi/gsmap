@@ -7,7 +7,6 @@ import (
 	"io"
 
 	"github.com/fkgi/gsmap"
-	"github.com/fkgi/gsmap/common"
 	"github.com/fkgi/teldata"
 )
 
@@ -51,20 +50,20 @@ type LocationInfoWithLMSI struct {
 }
 
 type NodeNumber struct {
-	Address common.AddressString
+	Address gsmap.AddressString
 	IsGPRS  bool
 }
 
 func (l LocationInfoWithLMSI) MarshalJSON() ([]byte, error) {
 	type AdditionalNumber struct {
-		MSC  *common.AddressString `json:"msc-Number,omitempty"`
-		SGSN *common.AddressString `json:"sgsn-Number,omitempty"`
+		MSC  *gsmap.AddressString `json:"msc-Number,omitempty"`
+		SGSN *gsmap.AddressString `json:"sgsn-Number,omitempty"`
 	}
 	j := struct {
-		NN   common.AddressString `json:"networkNode-Number"`
-		LMSI *teldata.LMSI        `json:"lmsi,omitempty"`
-		GPRS bool                 `json:"gprsNodeIndicator,omitempty"`
-		ANN  *AdditionalNumber    `json:"additional-Number,omitempty"`
+		NN   gsmap.AddressString `json:"networkNode-Number"`
+		LMSI *teldata.LMSI       `json:"lmsi,omitempty"`
+		GPRS bool                `json:"gprsNodeIndicator,omitempty"`
+		ANN  *AdditionalNumber   `json:"additional-Number,omitempty"`
 	}{
 		NN:   l.NodeNumber.Address,
 		GPRS: l.NodeNumber.IsGPRS,
@@ -84,12 +83,12 @@ func (l LocationInfoWithLMSI) MarshalJSON() ([]byte, error) {
 
 func (l *LocationInfoWithLMSI) UnmarshalJSON(b []byte) (e error) {
 	j := struct {
-		NN   common.AddressString `json:"networkNode-Number"`
-		LMSI *teldata.LMSI        `json:"lmsi,omitempty"`
-		GPRS bool                 `json:"gprsNodeIndicator,omitempty"`
+		NN   gsmap.AddressString `json:"networkNode-Number"`
+		LMSI *teldata.LMSI       `json:"lmsi,omitempty"`
+		GPRS bool                `json:"gprsNodeIndicator,omitempty"`
 		ANN  *struct {
-			MSC  *common.AddressString `json:"msc-Number,omitempty"`
-			SGSN *common.AddressString `json:"sgsn-Number,omitempty"`
+			MSC  *gsmap.AddressString `json:"msc-Number,omitempty"`
+			SGSN *gsmap.AddressString `json:"sgsn-Number,omitempty"`
 		} `json:"additional-Number,omitempty"`
 	}{}
 
@@ -152,7 +151,7 @@ func (l *LocationInfoWithLMSI) unmarshal(data []byte) error {
 	// networkNode-Number, context_specific(80) + primitive(00) + 1(01)
 	if _, v, e := gsmap.ReadTLV(buf, 0x81); e != nil {
 		return e
-	} else if l.NodeNumber.Address, e = common.DecodeAddressString(v); e != nil {
+	} else if l.NodeNumber.Address, e = gsmap.DecodeAddressString(v); e != nil {
 		return e
 	}
 
@@ -178,7 +177,7 @@ func (l *LocationInfoWithLMSI) unmarshal(data []byte) error {
 
 	// extensionContainer, universal(00) + constructed(20) + sequence(10)
 	if t == 0x30 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return e
 		}
 
@@ -213,7 +212,7 @@ func (l *LocationInfoWithLMSI) unmarshal(data []byte) error {
 		default:
 			return gsmap.UnexpectedTag([]byte{0x80, 0x81}, t)
 		}
-		if l.AdditionalNumber.Address, e = common.DecodeAddressString(v); e != nil {
+		if l.AdditionalNumber.Address, e = gsmap.DecodeAddressString(v); e != nil {
 			return e
 		}
 		/*

@@ -8,14 +8,7 @@ import (
 	"strings"
 
 	"github.com/fkgi/gsmap"
-	"github.com/fkgi/gsmap/common"
 	"github.com/fkgi/teldata"
-)
-
-const (
-	Reset1 gsmap.AppContext = 0x0004000001000a01
-	Reset2 gsmap.AppContext = 0x0004000001000a02
-	Reset3 gsmap.AppContext = 0x0004000001000a03
 )
 
 /*
@@ -54,8 +47,8 @@ ResetArg
 type ResetArg struct {
 	InvokeID int8 `json:"id"`
 
-	HlrNumber common.AddressString `json:"hlr-Number"`
-	HlrList   []teldata.IMSI       `json:"hlr-List,omitempty"`
+	HlrNumber gsmap.AddressString `json:"hlr-Number"`
+	HlrList   []teldata.IMSI      `json:"hlr-List,omitempty"`
 	// Extension ExtensionContainer `json:"extensionContainer,omitempty"`
 }
 
@@ -121,7 +114,7 @@ func (ResetArg) Unmarshal(id int8, _ *int8, buf *bytes.Buffer) (gsmap.Invoke, er
 	// hlr-Number, universal(00) + primitive(00) + octet_string(04)
 	if _, v, e := gsmap.ReadTLV(buf, 0x04); e != nil {
 		return nil, e
-	} else if re.HlrNumber, e = common.DecodeAddressString(v); e != nil {
+	} else if re.HlrNumber, e = gsmap.DecodeAddressString(v); e != nil {
 		return nil, e
 	}
 
@@ -148,7 +141,7 @@ func (ResetArg) Unmarshal(id int8, _ *int8, buf *bytes.Buffer) (gsmap.Invoke, er
 
 	// extensionContainer, context_specific(80) + constructed(20) + 0(00)
 	if t == 0xa0 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return nil, e
 		}
 		/*

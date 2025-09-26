@@ -69,6 +69,14 @@ func main() {
 
 	xua.LocalPC = uint32(*lpc)
 	asp.PointCode = uint32(*ppc)
+	asp.Context = uint32(*rc)
+
+	if asp.PointCode != 0 && xua.LocalPC == 0 {
+		log.Fatalln("[ERROR]", "local point code is not specified")
+	}
+	if asp.Context == 0 {
+		log.Fatalln("[ERROR]", "routing context is not specified")
+	}
 
 	tcap.SelectASP = func() *xua.ASP {
 		return &asp
@@ -154,7 +162,7 @@ func main() {
 	}()
 
 	log.Println("[INFO]", "Connecting ASP")
-	log.Println("[INFO]", "closed, error=", asp.DialAndServe(la, pa, uint32(*rc)))
+	log.Println("[INFO]", "closed, error=", asp.DialAndServe(la, pa))
 }
 
 func readFromJSON(d []byte, defaultID int8) (cdpa xua.SCCPAddr, cgpa *xua.SCCPAddr, cpnt []gsmap.Component, e error) {

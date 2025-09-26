@@ -5,6 +5,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"path/filepath"
+	"runtime"
+	"strconv"
+	"strings"
 )
 
 /*
@@ -29,6 +33,10 @@ import (
 	Set         byte = 0x11
 */
 
+/*
+WriteTLV writes TLV data to w and returns the written byte slice.
+If tag is 0x00, any tag is accepted when reading.
+*/
 func WriteTLV(w *bytes.Buffer, t byte, v []byte) []byte {
 	w.WriteByte(t)
 	if l := len(v); l < 128 {
@@ -66,6 +74,9 @@ func WriteTLV(w *bytes.Buffer, t byte, v []byte) []byte {
 	return w.Bytes()
 }
 
+/*
+ReadTLV reads TLV data from r. If tag is 0x00, any tag is accepted.
+*/
 func ReadTLV(r *bytes.Buffer, tag byte) (t byte, v []byte, e error) {
 	if t, e = r.ReadByte(); e != nil {
 		return
@@ -117,6 +128,69 @@ func ReadTLV(r *bytes.Buffer, tag byte) (t byte, v []byte, e error) {
 func UnmarshalIntenger(data []byte) int {
 	i, _ := binary.Varint(data)
 	return int(i)
+}
+
+/*
+UnexpectedTLVError represents unexpected TLV error.
+*/
+type UnexpectedTLVError struct {
+	s string
+
+	funcName string
+	fileName string
+	line     int
+}
+
+/*
+UnexpectedTag returns UnexpectedTLVError for unexpected tag.
+exp is a slice of expected tags.
+*/
+func UnexpectedTag(exp []byte, act byte) UnexpectedTLVError {
+	buf := new(strings.Builder)
+	for _, b := range exp {
+		fmt.Fprintf(buf, "%#x,", b)
+	}
+	s := buf.String()
+	if len(s) != 0 {
+		s = s[:len(s)-1]
+	}
+	return unexpectedTLV(
+		fmt.Sprintf("expected tags are [%s] but %#x", s, act), 2)
+}
+
+/*
+UnexpectedEnumValue returns UnexpectedTLVError for unexpected enum value.
+*/
+func UnexpectedEnumValue(data []byte) UnexpectedTLVError {
+	i, _ := binary.Varint(data)
+	return unexpectedTLV(fmt.Sprintf(
+		"unexpected enum value %0"+strconv.Itoa(len(data)*2)+"x", i), 2)
+}
+
+/*
+UnexpectedTLV returns UnexpectedTLVError for unexpected TLV.
+*/
+func UnexpectedTLV(s string) UnexpectedTLVError {
+	return unexpectedTLV(s, 2)
+}
+
+func unexpectedTLV(s string, skip int) (e UnexpectedTLVError) {
+	if p, f, l, ok := runtime.Caller(skip); ok {
+		e.fileName = filepath.Base(f)
+		e.line = l
+		e.funcName = runtime.FuncForPC(p).Name()
+	} else {
+		e.fileName = "unknown"
+		e.line = 0
+		e.funcName = "unknown"
+	}
+	e.s = s
+	return
+}
+
+func (e UnexpectedTLVError) Error() string {
+	return fmt.Sprintf("unexpected TLV in %s(%s %d), %s",
+		e.funcName, e.fileName, e.line, e.s)
 }
 
 /*

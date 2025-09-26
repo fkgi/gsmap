@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/fkgi/gsmap/common"
+	"github.com/fkgi/gsmap"
 	"github.com/fkgi/gsmap/ife"
 	"github.com/fkgi/teldata"
 )
 
 func TestMarshalJSONMT(t *testing.T) {
 	imsi, _ := teldata.ParseIMSI("1234567")
-	gt := common.AddressString{
+	gt := gsmap.AddressString{
 		NatureOfAddress: teldata.International,
 		NumberingPlan:   teldata.ISDNTelephony}
 	gt.Digits, _ = teldata.ParseTBCD("0987")
@@ -36,11 +36,11 @@ func TestMarshalJSONMT(t *testing.T) {
 }
 
 func TestMarshalJSONMO(t *testing.T) {
-	msisdn := common.AddressString{
+	msisdn := gsmap.AddressString{
 		NatureOfAddress: teldata.International,
 		NumberingPlan:   teldata.ISDNTelephony}
 	msisdn.Digits, _ = teldata.ParseTBCD("819011110001")
-	gt := common.AddressString{
+	gt := gsmap.AddressString{
 		NatureOfAddress: teldata.International,
 		NumberingPlan:   teldata.ISDNTelephony}
 	gt.Digits, _ = teldata.ParseTBCD("0987")

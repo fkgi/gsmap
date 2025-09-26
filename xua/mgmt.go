@@ -44,7 +44,7 @@ Direction is SGP -> ASP.
 */
 type ERR struct {
 	code uint32
-	ctx  []uint32
+	ctx  uint32
 	apc  []PointCode
 	na   *uint32
 	// info []byte
@@ -57,7 +57,7 @@ func (m *ERR) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	case 0x000C: // Error Code
 		m.code, e = readUint32(r, l)
 	case 0x0006: // Routing Context (Optional)
-		m.ctx, e = readRoutingContext(r, l)
+		m.ctx, e = readUint32(r, l)
 	case 0x0012: // Affected Point Code (Optional)
 		m.apc, e = readAPC(r, l)
 	case 0x010D: // Network Appearance (Optional)
@@ -125,7 +125,7 @@ NTFY is Notify message. (Message type = 0x01)
 type NTFY struct {
 	status Status
 	// id     *uint32
-	ctx []uint32
+	ctx uint32
 	// info    string
 }
 
@@ -173,7 +173,7 @@ func (m *NTFY) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	// case 0x0011: // ASP Identifier (Optional)
 	//	*(m.id), e = readUint32(r, l)
 	case 0x0006: // Routing Context (Optional)
-		m.ctx, e = readRoutingContext(r, l)
+		m.ctx, e = readUint32(r, l)
 	// case 0x0004: // Info String (Optional)
 	// 	m.info, e = readInfo(r, l)
 	default:

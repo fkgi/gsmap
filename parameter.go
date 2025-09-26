@@ -1,11 +1,10 @@
-package common
+package gsmap
 
 import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
-	"github.com/fkgi/gsmap"
 	"github.com/fkgi/teldata"
 )
 
@@ -107,7 +106,7 @@ func (a AddressString) IsEmpty() bool {
 
 func DecodeAddressString(data []byte) (a AddressString, e error) {
 	if len(data) == 0 {
-		e = gsmap.UnexpectedTLV("invalid empty data")
+		e = UnexpectedTLV("invalid empty data")
 	} else {
 		a.NatureOfAddress = teldata.NatureOfAddress(data[0]&0x70) >> 4
 		a.NumberingPlan = teldata.NumberingPlan(data[0] & 0x0f)

@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/fkgi/gsmap"
-	"github.com/fkgi/gsmap/common"
 )
 
 /*
@@ -32,8 +31,7 @@ import (
 				-- bits 7654321: group (bits 7654), and rate, if applicable (bits 321)
 		-- OCTETS 2-5: reserved for future use.
 
-	SS-List ::= SEQUENCE SIZE (1..maxNumOfSS) OF
-		SS-Code
+	SS-List ::= SEQUENCE SIZE (1..maxNumOfSS) OF SS-Code
 	SS-Code ::= OCTET STRING (SIZE (1))
 		-- bits 87654321: group (bits 8765), and specific service (bits 4321)
 */
@@ -203,7 +201,7 @@ func (o *odbData) unmarshal(data []byte) error {
 
 	// extensionContainer, universal(00) + constructed(20) + sequence(10)
 	if t == 0x30 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return e
 		}
 		/*
@@ -520,7 +518,7 @@ func (d *vGroupCallData) unmarshal(v []byte) error {
 
 	// extensionContainer, universal(00) + constructed(20) + sequence(10)
 	if t == 0x30 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return e
 		}
 
@@ -618,7 +616,7 @@ func (d *vBroadcastData) unmarshal(v []byte) error {
 
 	// extensionContainer, universal(00) + constructed(20) + sequence(10)
 	if t == 0x30 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return e
 		}
 
@@ -732,7 +730,7 @@ func (n *NAEAPreferredCI) unmarshal(b []byte) error {
 
 	// extensionContainer, context_specific(80) + constructed(20) + 1(01)
 	if t == 0xa1 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return e
 		}
 	}

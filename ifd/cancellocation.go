@@ -8,13 +8,6 @@ import (
 	"strings"
 
 	"github.com/fkgi/gsmap"
-	"github.com/fkgi/gsmap/common"
-)
-
-const (
-	LocationCancellation1 gsmap.AppContext = 0x0004000001000201
-	LocationCancellation2 gsmap.AppContext = 0x0004000001000202
-	LocationCancellation3 gsmap.AppContext = 0x0004000001000203
 )
 
 /*
@@ -154,7 +147,7 @@ func (CancelLocationArg) Unmarshal(id int8, _ *int8, buf *bytes.Buffer) (gsmap.I
 
 	// extensionContainer, universal(00) + constructed(20) + sequence(10)
 	if t == 0x30 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return nil, e
 		}
 	}
@@ -233,7 +226,7 @@ func (CancelLocationRes) Unmarshal(id int8, buf *bytes.Buffer) (gsmap.ReturnResu
 
 	// extensionContainer, universal(00) + constructed(20) + sequence(10)
 	if t == 0x30 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return nil, e
 		}
 	}

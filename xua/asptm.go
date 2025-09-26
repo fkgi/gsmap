@@ -56,7 +56,7 @@ ASPAC is ASP Active message. (Message type = 0x01)
 */
 type ASPAC struct {
 	mode uint32
-	ctx  []uint32
+	ctx  uint32
 	// tid  *Label
 	// drn  *Label
 	// info string
@@ -94,9 +94,7 @@ func (m *ASPAC) marshal() (uint8, uint8, []byte) {
 	}
 
 	// Routing Context (Optional)
-	if len(m.ctx) != 0 {
-		writeRoutingContext(buf, m.ctx)
-	}
+	writeUint32(buf, 0x0006, m.ctx)
 
 	// TID Label (Optional)
 	// if m.tid != nil {
@@ -141,7 +139,7 @@ ASPIA is ASP Inactive message. (Message type = 0x02)
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 type ASPIA struct {
-	ctx []uint32
+	ctx uint32
 	// info    string
 
 	result chan error
@@ -168,9 +166,7 @@ func (m *ASPIA) marshal() (uint8, uint8, []byte) {
 	buf := new(bytes.Buffer)
 
 	// Routing Context (Optional)
-	if len(m.ctx) != 0 {
-		writeRoutingContext(buf, m.ctx)
-	}
+	writeUint32(buf, 0x0006, m.ctx)
 
 	// Info String (Optional)
 	// if len(m.info) != 0 {
@@ -202,7 +198,7 @@ ASPACAck is ASP Active Ack message. (Message type = 0x03)
 */
 type ASPACAck struct {
 	mode uint32
-	ctx  []uint32
+	ctx  uint32
 	// info    string
 }
 
@@ -213,7 +209,7 @@ func (m *ASPACAck) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	case 0x000B: // Traffic Mode Type (Optional)
 		m.mode, e = readUint32(r, l)
 	case 0x0006: // Routing Context (Optional)
-		m.ctx, e = readRoutingContext(r, l)
+		m.ctx, e = readUint32(r, l)
 	// case 0x0004:	// Info String (Optional)
 	// 	m.info, e = readInfo(r, l)
 	default:
@@ -240,7 +236,7 @@ ASPIAAck is ASP Inactive Ack message. (Message type = 0x04)
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 type ASPIAAck struct {
-	ctx []uint32
+	ctx uint32
 	// info    string
 }
 
@@ -249,7 +245,7 @@ func (m *ASPIAAck) handleMessage(c *ASP) { handleCtrlAns(c, m) }
 func (m *ASPIAAck) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
 	case 0x0006: // Routing Context (Optional)
-		m.ctx, e = readRoutingContext(r, l)
+		m.ctx, e = readUint32(r, l)
 	// case 0x0004:	// Info String
 	// 	m.info, e = readInfo(r, l)
 	default:

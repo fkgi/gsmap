@@ -8,14 +8,7 @@ import (
 	"strings"
 
 	"github.com/fkgi/gsmap"
-	"github.com/fkgi/gsmap/common"
 	"github.com/fkgi/teldata"
-)
-
-const (
-	ShortMsgRelay1   gsmap.AppContext = 0x0004000001001501
-	ShortMsgMORelay2 gsmap.AppContext = 0x0004000001001502
-	ShortMsgMORelay3 gsmap.AppContext = 0x0004000001001503
 )
 
 /*
@@ -91,10 +84,10 @@ moreMessagesToSend must be absent in version 1.
 type MOForwardSMArg struct {
 	InvokeID int8 `json:"id"`
 
-	SMRPDA RpAddr             `json:"sm-RP-DA"`
-	SMRPOA RpAddr             `json:"sm-RP-OA"`
-	SMRPUI common.OctetString `json:"sm-RP-UI"`
-	MMS    bool               `json:"moreMessagesToSend,omitempty"`
+	SMRPDA RpAddr            `json:"sm-RP-DA"`
+	SMRPOA RpAddr            `json:"sm-RP-OA"`
+	SMRPUI gsmap.OctetString `json:"sm-RP-UI"`
+	MMS    bool              `json:"moreMessagesToSend,omitempty"`
 	// Extension ExtensionContainer `json:"extensionContainer,omitempty"`
 	IMSI teldata.IMSI `json:"imsi,omitempty"`
 }
@@ -217,7 +210,7 @@ func (MOForwardSMArg) Unmarshal(id int8, _ *int8, buf *bytes.Buffer) (gsmap.Invo
 
 	// extensionContainer, universal(00) + constructed(20) + sequence(10)
 	if t == 0x30 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return nil, e
 		}
 
@@ -257,7 +250,7 @@ MOForwardSMRes operation res.
 type MOForwardSMRes struct {
 	InvokeID int8 `json:"id"`
 
-	SMRPUI common.OctetString `json:"sm-RP-UI,omitempty"`
+	SMRPUI gsmap.OctetString `json:"sm-RP-UI,omitempty"`
 	// Extension ExtensionContainer `json:"extensionContainer,omitempty"`
 }
 
@@ -340,7 +333,7 @@ func (MOForwardSMRes) Unmarshal(id int8, buf *bytes.Buffer) (gsmap.ReturnResultL
 
 	// extensionContainer, universal(00) + constructed(20) + sequence(10)
 	if t == 0x30 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return nil, e
 		}
 	}

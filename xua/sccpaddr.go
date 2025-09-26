@@ -242,7 +242,7 @@ func (a *SCCPAddr) marshalSCCP() []byte {
 
 func readSUAAddr(r io.ReadSeeker, l uint16) (a SCCPAddr, e error) {
 	if l%4 != 0 {
-		e = errors.New("invalid lenght of parameter")
+		e = errors.New("invalid length of parameter")
 		return
 	}
 	var ri, ai uint16
@@ -271,7 +271,7 @@ func readSUAAddr(r io.ReadSeeker, l uint16) (a SCCPAddr, e error) {
 		switch t {
 		case 0x8001: // GT
 			if l < 8 {
-				e = errors.New("invalid lenght of parameter")
+				e = errors.New("invalid length of parameter")
 				break
 			}
 			gthdr := make([]byte, 8)

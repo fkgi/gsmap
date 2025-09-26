@@ -28,14 +28,12 @@ const (
 	Rx Direction = false
 )
 
-var (
-	NewInvoke = func(*Transaction, []gsmap.Component) ([]gsmap.Component, ComponentHandler) {
-		return []gsmap.Component{}, nil
-	}
-	SelectASP = func() *xua.ASP {
-		return nil
-	}
-)
+var NewInvoke = func(*Transaction, []gsmap.Component) ([]gsmap.Component, ComponentHandler) {
+	return []gsmap.Component{}, nil
+}
+var SelectASP = func() *xua.ASP {
+	return nil
+}
 
 func init() {
 	xua.PayloadHandler = func(cgpa xua.SCCPAddr, cdpa xua.SCCPAddr, data []byte) {

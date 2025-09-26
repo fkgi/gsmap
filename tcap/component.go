@@ -80,14 +80,6 @@ func unmarshalComponents(data []byte) ([]gsmap.Component, error) {
 }
 
 /*
-func unmarshalInvokeID(data []byte) (int8, error) {
-	if len(data) != 1 {
-		return 0, fmt.Errorf("invalid invokeID value")
-	}
-	return int8(data[0]), nil
-}
-*/
-/*
 	Invoke ::= SEQUENCE {
 		invokeID          InvokeIdType,
 		linkedID      [0] IMPLICIT InvokeIdType        OPTIONAL,

@@ -68,7 +68,7 @@ CLDT is Connectionless Data Transfer message. (Message type = 0x01)
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 type CLDT struct {
-	ctx           []uint32
+	ctx           uint32
 	returnOnError bool
 	protocolClass uint8
 	//cgpa          SCCPAddr
@@ -136,7 +136,7 @@ func (m *TxCLDT) marshal() (uint8, uint8, []byte) {
 	buf := new(bytes.Buffer)
 
 	// Routing Context
-	writeRoutingContext(buf, m.ctx)
+	writeUint32(buf, 0x0006, m.ctx)
 
 	// Protocol Class
 	if m.returnOnError {
@@ -216,7 +216,7 @@ func (m *RxCLDT) handleMessage(c *ASP) {
 func (m *RxCLDT) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
 	case 0x0006: // Routing Context
-		m.ctx, e = readRoutingContext(r, l)
+		m.ctx, e = readUint32(r, l)
 	case 0x0115: // Protocol Class
 		m.protocolClass, e = readUint8(r, l)
 		m.returnOnError = m.protocolClass&0x80 == 0x80
@@ -299,7 +299,7 @@ CLDR is Connectionless Data Response message. (Message type = 0x02)
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 type CLDR struct {
-	ctx   []uint32
+	ctx   uint32
 	cause Cause
 	//cgpa  SCCPAddr
 	//cdpa  SCCPAddr
@@ -375,7 +375,7 @@ func (m *TxCLDR) marshal() (uint8, uint8, []byte) {
 	buf := new(bytes.Buffer)
 
 	// Routing Context
-	writeRoutingContext(buf, m.ctx)
+	writeUint32(buf, 0x0006, m.ctx)
 
 	// SCCP Cause
 	writeUint32(buf, 0x0106, uint32(m.cause))
@@ -441,7 +441,7 @@ func (m *RxCLDR) handleMessage(c *ASP) {
 func (m *RxCLDR) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
 	case 0x0006: // Routing Context
-		m.ctx, e = readRoutingContext(r, l)
+		m.ctx, e = readUint32(r, l)
 	case 0x0106: // Sequence Control
 		var tmp uint32
 		tmp, e = readUint32(r, l)

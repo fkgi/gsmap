@@ -7,7 +7,6 @@ import (
 	"io"
 
 	"github.com/fkgi/gsmap"
-	"github.com/fkgi/gsmap/common"
 )
 
 /*
@@ -88,7 +87,7 @@ func (MessageWaitingListFull) Unmarshal(id int8, buf *bytes.Buffer) (gsmap.Retur
 	} else if e != nil {
 		return nil, e
 	} else if t == 0x30 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return nil, e
 		}
 	}

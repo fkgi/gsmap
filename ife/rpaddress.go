@@ -4,7 +4,6 @@ import (
 	"bytes"
 
 	"github.com/fkgi/gsmap"
-	"github.com/fkgi/gsmap/common"
 	"github.com/fkgi/teldata"
 )
 
@@ -30,11 +29,11 @@ type RpAddr interface {
 }
 
 type rpAddrJSON struct {
-	IMSI       teldata.IMSI         `json:"imsi"`
-	LMSI       teldata.LMSI         `json:"lmsi"`
-	MSISDN     common.AddressString `json:"msisdn"`
-	RoamingNum common.AddressString `json:"roamingNumber"`
-	SCAddr     common.AddressString `json:"serviceCentreAddress"`
+	IMSI       teldata.IMSI        `json:"imsi"`
+	LMSI       teldata.LMSI        `json:"lmsi"`
+	MSISDN     gsmap.AddressString `json:"msisdn"`
+	RoamingNum gsmap.AddressString `json:"roamingNumber"`
+	SCAddr     gsmap.AddressString `json:"serviceCentreAddress"`
 }
 
 func (r rpAddrJSON) getRpAddr() RpAddr {
@@ -75,21 +74,21 @@ func unmarshalRPAddr(buf *bytes.Buffer) (RpAddr, error) {
 	case 0x82:
 		// msisdn, context_specific(80) + primitive(00) + 2(02)
 		ret := RpMSISDN{}
-		if ret.MSISDN, e = common.DecodeAddressString(v); e != nil {
+		if ret.MSISDN, e = gsmap.DecodeAddressString(v); e != nil {
 			return nil, e
 		}
 		return ret, nil
 	case 0x83:
 		// roamingNumber, context_specific(80) + primitive(00) + 3(03)
 		ret := RpRoamingNumber{}
-		if ret.RoamingNum, e = common.DecodeAddressString(v); e != nil {
+		if ret.RoamingNum, e = gsmap.DecodeAddressString(v); e != nil {
 			return nil, e
 		}
 		return ret, nil
 	case 0x84:
 		// serviceCenterAddress, context_specific(80) + primitive(00) + 4(04)
 		ret := RpSCAddress{}
-		if ret.SCAddr, e = common.DecodeAddressString(v); e != nil {
+		if ret.SCAddr, e = gsmap.DecodeAddressString(v); e != nil {
 			return nil, e
 		}
 		return ret, nil
@@ -143,7 +142,7 @@ func (r RpLMSI) String() string {
 }
 
 type RpMSISDN struct {
-	MSISDN common.AddressString `json:"msisdn"`
+	MSISDN gsmap.AddressString `json:"msisdn"`
 }
 
 func (RpMSISDN) RpAddrID() []byte {
@@ -155,7 +154,7 @@ func (r RpMSISDN) String() string {
 }
 
 type RpRoamingNumber struct {
-	RoamingNum common.AddressString `json:"roamingNumber"`
+	RoamingNum gsmap.AddressString `json:"roamingNumber"`
 }
 
 func (RpRoamingNumber) RpAddrID() []byte {
@@ -167,7 +166,7 @@ func (r RpRoamingNumber) String() string {
 }
 
 type RpSCAddress struct {
-	SCAddr common.AddressString `json:"serviceCentreAddress"`
+	SCAddr gsmap.AddressString `json:"serviceCentreAddress"`
 }
 
 func (RpSCAddress) RpAddrID() []byte {

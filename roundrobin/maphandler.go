@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/fkgi/gsmap"
-	"github.com/fkgi/gsmap/common"
 	"github.com/fkgi/gsmap/tcap"
 )
 
@@ -27,7 +26,7 @@ func handleIncomingDialog(t *tcap.Transaction, cp []gsmap.Component) ([]gsmap.Co
 	if e != nil {
 		log.Println("[ERROR]", "failed to unmarshal JSON:", e)
 		return []gsmap.Component{
-				&common.SystemFailure{InvokeID: t.LastInvokeID}},
+				&gsmap.SystemFailure{InvokeID: t.LastInvokeID}},
 			nil
 	}
 
@@ -36,7 +35,7 @@ func handleIncomingDialog(t *tcap.Transaction, cp []gsmap.Component) ([]gsmap.Co
 	if e != nil {
 		log.Println("[ERROR]", "failed to access to backend:", e)
 		return []gsmap.Component{
-				&common.SystemFailure{InvokeID: t.LastInvokeID}},
+				&gsmap.SystemFailure{InvokeID: t.LastInvokeID}},
 			nil
 	}
 	defer r.Body.Close()
@@ -50,7 +49,7 @@ func handleIncomingDialog(t *tcap.Transaction, cp []gsmap.Component) ([]gsmap.Co
 	default:
 		log.Println("[ERROR]", "error from backend:", r.StatusCode, r.Status)
 		return []gsmap.Component{
-				&common.SystemFailure{InvokeID: t.LastInvokeID}},
+				&gsmap.SystemFailure{InvokeID: t.LastInvokeID}},
 			nil
 	}
 
@@ -58,14 +57,14 @@ func handleIncomingDialog(t *tcap.Transaction, cp []gsmap.Component) ([]gsmap.Co
 	if e != nil {
 		log.Println("[ERROR]", "failed to get data from backend:", e)
 		return []gsmap.Component{
-				&common.SystemFailure{InvokeID: t.LastInvokeID}},
+				&gsmap.SystemFailure{InvokeID: t.LastInvokeID}},
 			nil
 	}
 	_, _, cp, e = readFromJSON(jsondata, t.LastInvokeID)
 	if e != nil {
 		log.Println("[ERROR]", "failed to unmarshal JSON:", e)
 		return []gsmap.Component{
-				&common.SystemFailure{}},
+				&gsmap.SystemFailure{}},
 			nil
 	}
 
@@ -113,14 +112,14 @@ func following(t *tcap.Transaction, cp []gsmap.Component, e error, path string) 
 		var jsondata []byte
 		jsondata, e = writeToJSON(nil, &t.CdPA, cp)
 		if e != nil {
-			t.End(&common.SystemFailure{InvokeID: t.LastInvokeID})
+			t.End(&gsmap.SystemFailure{InvokeID: t.LastInvokeID})
 			return
 		}
 
 		var r *http.Response
 		r, e = client.Post(backend+path, "application/json", bytes.NewBuffer(jsondata))
 		if e != nil {
-			t.End(&common.SystemFailure{InvokeID: t.LastInvokeID})
+			t.End(&gsmap.SystemFailure{InvokeID: t.LastInvokeID})
 			return
 		}
 		defer r.Body.Close()
@@ -134,18 +133,18 @@ func following(t *tcap.Transaction, cp []gsmap.Component, e error, path string) 
 			t.Reject()
 			return
 		default:
-			t.End(&common.SystemFailure{InvokeID: t.LastInvokeID})
+			t.End(&gsmap.SystemFailure{InvokeID: t.LastInvokeID})
 			return
 		}
 
 		jsondata, e = io.ReadAll(r.Body)
 		if e != nil {
-			t.End(&common.SystemFailure{InvokeID: t.LastInvokeID})
+			t.End(&gsmap.SystemFailure{InvokeID: t.LastInvokeID})
 			return
 		}
 		_, _, cp, e = readFromJSON(jsondata, t.LastInvokeID)
 		if e != nil {
-			t.End(&common.SystemFailure{InvokeID: t.LastInvokeID})
+			t.End(&gsmap.SystemFailure{InvokeID: t.LastInvokeID})
 			return
 		}
 

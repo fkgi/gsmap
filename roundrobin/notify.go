@@ -16,11 +16,11 @@ func init() {
 			log.Printf("[ERROR] failed to up ASP (%s->%s): error=%s", la, pa, e)
 		}
 	}
-	xua.AsUpNotify = func(ctxs []uint32, e error) {
+	xua.AsUpNotify = func(ctx uint32, e error) {
 		if e == nil {
-			log.Printf("[INFO] AS up (RC=%v)", ctxs)
+			log.Printf("[INFO] AS up (RC=%d)", ctx)
 		} else {
-			log.Printf("[ERROR] failed to up AS (RC=%v): error=%s", ctxs, e)
+			log.Printf("[ERROR] failed to up AS (RC=%d): error=%s", ctx, e)
 		}
 	}
 

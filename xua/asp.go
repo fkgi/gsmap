@@ -61,8 +61,8 @@ type ASP struct {
 	sock    int
 	msgQ    chan message
 	ctrlMsg txMessage
-	ctxs    []uint32
 
+	Context   uint32
 	PointCode uint32
 
 	state    Status
@@ -94,10 +94,9 @@ func (c *ASP) RemoteAddr() net.Addr {
 	return resolveFromRawAddr(ptr, n)
 }
 
-func (c *ASP) DialAndServe(la, pa *SCTPAddr, ctx uint32) (e error) {
+func (c *ASP) DialAndServe(la, pa *SCTPAddr) (e error) {
 	c.msgQ = make(chan message, 1024)
 	c.ctrlMsg = nil
-	c.ctxs = []uint32{ctx}
 	c.state = Down
 	c.sequence = make(chan uint32, 1)
 	c.sequence <- 0
@@ -145,10 +144,10 @@ func (c *ASP) DialAndServe(la, pa *SCTPAddr, ctx uint32) (e error) {
 		}
 
 		r = make(chan error, 1)
-		c.msgQ <- &ASPAC{mode: Loadshare, ctx: c.ctxs, result: r}
+		c.msgQ <- &ASPAC{mode: Loadshare, ctx: c.Context, result: r}
 		e = <-r
 		if AsUpNotify != nil {
-			AsUpNotify(c.ctxs, e)
+			AsUpNotify(c.Context, e)
 		}
 		if e != nil {
 			_ = sockClose(c.sock)
@@ -366,7 +365,7 @@ func (c *ASP) Write(cdpa SCCPAddr, data []byte) {
 
 	if c.PointCode == 0 {
 		c.msgQ <- &TxCLDT{
-			ctx:           c.ctxs,
+			ctx:           c.Context,
 			returnOnError: ReturnOnError,
 			sequenceCtrl:  seq,
 			userData: userData{
@@ -375,7 +374,7 @@ func (c *ASP) Write(cdpa SCCPAddr, data []byte) {
 				data: data}}
 	} else {
 		c.msgQ <- &TxDATA{
-			ctx:           c.ctxs[0],
+			ctx:           c.Context,
 			opc:           LocalPC,
 			dpc:           c.PointCode,
 			ni:            Network,

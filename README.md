@@ -38,6 +38,11 @@ This package is designed for use in telecom signaling, testing, and development 
 - Linux OS (SCTP support requires Linux kernel module)
 - Not available on non-Linux platforms
 
+## Restriction
+- Only UDT is supported (XUDT/LUDT is not supported) for SCCP
+- Only connection less classes are supported for SCCP/SUA
+- For SSNM xUA message, only recieveing is supported
+
 ## Usage
 You can use `gsmap` as a library in your Go project or as a base for building MAP-related tools and servers.
 Example (see `roundrobin` directory for a sample application):

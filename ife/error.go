@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/fkgi/gsmap"
-	"github.com/fkgi/gsmap/common"
 )
 
 /*
@@ -109,7 +108,7 @@ func (SubscriberBusyForMT_SMS) Unmarshal(id int8, buf *bytes.Buffer) (gsmap.Retu
 
 	// extensionContainer, universal(00) + constructed(20) + sequence(10)
 	if t == 0x30 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return nil, e
 		}
 
@@ -156,7 +155,7 @@ type SM_DeliveryFailure struct {
 
 	NotExtensible bool                 `json:"notExtensible,omitempty"`
 	Cause         DeliveryFailureCause `json:"sm-EnumeratedDeliveryFailureCause"`
-	Diag          common.OctetString   `json:"diagnosticInfo,omitempty"`
+	Diag          gsmap.OctetString    `json:"diagnosticInfo,omitempty"`
 	// Extension ExtensionContainer `json:"extensionContainer,omitempty"`
 }
 
@@ -274,7 +273,7 @@ func (SM_DeliveryFailure) Unmarshal(id int8, buf *bytes.Buffer) (gsmap.ReturnErr
 
 	// extensionContainer, universal(00) + constructed(20) + sequence(10)
 	if t == 0x30 {
-		if _, e = common.UnmarshalExtension(v); e != nil {
+		if _, e = gsmap.UnmarshalExtension(v); e != nil {
 			return nil, e
 		}
 	}

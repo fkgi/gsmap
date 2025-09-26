@@ -394,7 +394,7 @@ func (d *AARE) unmarshalDialogue(b []byte) error {
 	} else if _, v, e = gsmap.ReadTLV(bytes.NewBuffer(v), 0x02); e != nil {
 		return e
 	} else if len(v) != 1 || v[0] > 1 {
-		e = gsmap.UnexpectedTLV("invalid parameter value")
+		return gsmap.UnexpectedTLV("invalid parameter value")
 	} else {
 		d.Result = Result(v[0])
 	}
@@ -414,7 +414,7 @@ func (d *AARE) unmarshalDialogue(b []byte) error {
 		if _, v, e = gsmap.ReadTLV(bytes.NewBuffer(v), 0x02); e != nil {
 			return e
 		} else if len(v) != 1 || v[0] > 2 {
-			e = gsmap.UnexpectedTLV("invalid parameter value")
+			return gsmap.UnexpectedTLV("invalid parameter value")
 		} else {
 			d.ResultSrc = d.ResultSrc | ResultSrc(v[0])
 		}
@@ -507,7 +507,7 @@ func (d *ABRT) unmarshalDialogue(b []byte) error {
 	if _, v, e := gsmap.ReadTLV(buf, 0x80); e != nil {
 		return e
 	} else if len(v) != 1 || v[0] > 1 {
-		e = gsmap.UnexpectedTLV("invalid parameter value")
+		return gsmap.UnexpectedTLV("invalid parameter value")
 	} else {
 		d.Source = Source(v[0])
 	}
