@@ -151,11 +151,13 @@ func (m *TxDATA) marshal() (uint8, uint8, []byte) {
 		ud.WriteByte(0x0a)
 		ud.WriteByte(byte(m.cause & 0x00ff))
 	}
-	cdpa := m.cdpa.marshalSCCP()
-	cgpa := m.cgpa.marshalSCCP()
+
 	ud.WriteByte(3)
+	cdpa := m.cdpa.marshalSCCP()
 	ud.WriteByte(byte(3 + len(cdpa)))
+	cgpa := m.cgpa.marshalSCCP()
 	ud.WriteByte(byte(3 + len(cdpa) + len(cgpa)))
+
 	ud.WriteByte(byte(len(cdpa)))
 	ud.Write(cdpa)
 	ud.WriteByte(byte(len(cgpa)))
@@ -251,11 +253,28 @@ func (m *RxDATA) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 		if e != nil {
 			return
 		}
-		buf.Seek(int64(3), io.SeekCurrent)
+
+		pos := make([]byte, 3)
+		if _, e = buf.Read(pos); e != nil {
+			return
+		}
+		d = make([]byte, buf.Len())
+		buf.Read(d)
+		buf.Reset(d)
+
+		if _, e = buf.Seek(int64(pos[0]-3), io.SeekStart); e != nil {
+			return
+		}
 		if m.cdpa, e = readSCCPAddr(buf); e != nil {
 			return
 		}
+		if _, e = buf.Seek(int64(pos[1]-2), io.SeekStart); e != nil {
+			return
+		}
 		if m.cgpa, e = readSCCPAddr(buf); e != nil {
+			return
+		}
+		if _, e = buf.Seek(int64(pos[2]-1), io.SeekStart); e != nil {
 			return
 		}
 		if t, e = buf.ReadByte(); e != nil {

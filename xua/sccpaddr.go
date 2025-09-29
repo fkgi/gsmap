@@ -349,7 +349,7 @@ func readSCCPAddr(buf *bytes.Reader) (a SCCPAddr, e error) {
 		if sn, e = buf.ReadByte(); e != nil {
 			return
 		}
-		a.SubsystemNumber = teldata.SubsystemNumber(sn)
+		a.SubsystemNumber = teldata.ParseSSN(sn)
 	}
 	if ai&0x3c != 0 {
 		isOdd := false

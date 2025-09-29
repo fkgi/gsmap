@@ -159,7 +159,10 @@ func sendAbort(cdpa xua.SCCPAddr, tid uint32, cause Cause) {
 }
 
 func send(cdpa xua.SCCPAddr, msg Message) (e error) {
-	a := SelectASP()
+	var a *xua.ASP = nil
+	if SelectASP != nil {
+		a = SelectASP()
+	}
 	if a == nil {
 		e = fmt.Errorf("failed to select destination")
 	}

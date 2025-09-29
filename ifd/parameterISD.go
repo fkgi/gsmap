@@ -343,11 +343,9 @@ func (o odbHplmnData) marshal() []byte {
 /*
 data16 is 2 octet string data.
 
-	ZoneCodeList ::= SEQUENCE SIZE (1..maxNumOfZoneCodes)
-		OF ZoneCode
+	ZoneCodeList ::= SEQUENCE SIZE (1..maxNumOfZoneCodes) OF ZoneCode
 	ZoneCode ::= OCTET STRING (SIZE (2))
 		-- internal structure is defined in TS 3GPP TS 23.003 [17]
-
 	ChargingCharacteristics ::= OCTET STRING (SIZE (2))
 		-- Octets are coded according to 3GPP TS 32.215.
 */
@@ -876,12 +874,12 @@ LCSInformation
 		-- add-lcs-PrivacyExceptionList with the same SS-Code, then the error unexpected
 		-- data value shall be returned.
 
-	GMLC-List ::= SEQUENCE SIZE (1..maxNumOfGMLC) OF
-		ISDN-AddressString
+	GMLC-List ::= SEQUENCE SIZE (1..maxNumOfGMLC) OF ISDN-AddressString
 		-- if segmentation is used, the complete GMLC-List shall be sent in one segment
 
 	LCS-PrivacyExceptionList ::= SEQUENCE SIZE (1..maxNumOfPrivacyClass) OF
 		LCS-PrivacyClass
+
 	LCS-PrivacyClass ::= SEQUENCE {
 		ss-Code                  SS-Code,
 		ss-Status                Ext-SS-Status,
@@ -910,8 +908,7 @@ LCSInformation
 		-- if segmentation is used, the complete LCS-PrivacyClass shall be sent in one segment
 	}
 
-	MOLR-List ::= SEQUENCE SIZE (1..maxNumOfMOLR-Class) OF
-		MOLR-Class
+	MOLR-List ::= SEQUENCE SIZE (1..maxNumOfMOLR-Class) OF MOLR-Class
 	MOLR-Class ::= SEQUENCE {
 		ss-Code                SS-Code,
 		ss-Status              Ext-SS-Status,

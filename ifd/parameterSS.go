@@ -15,8 +15,20 @@ import (
 ssInfoList
 
 	Ext-SS-InfoList ::= SEQUENCE SIZE (1..maxNumOfSS) OF Ext-SS-Info
+
+	Ext-SS-Info ::= CHOICE {
+		forwardingInfo	[0] Ext-ForwInfo,
+		callBarringInfo	[1] Ext-CallBarInfo,
+		cug-Info	    [2] CUG-Info,
+		ss-Data	        [3] Ext-SS-Data,
+		emlpp-Info      [4] EMLPP-Info}
 */
 type ssInfoList []ssInfo
+
+type ssInfo interface {
+	GetType() string
+	marshal() []byte
+}
 
 func (l ssInfoList) String() string {
 	buf := new(strings.Builder)
@@ -175,45 +187,6 @@ func (ssInfoList) unmarshal(data []byte) (ssInfoList, error) {
 			return l, e
 		}
 	}
-}
-
-/*
-ExtSSInfo
-
-	Ext-SS-Info ::= CHOICE {
-		forwardingInfo	[0] Ext-ForwInfo,
-		callBarringInfo	[1] Ext-CallBarInfo,
-		cug-Info	    [2] CUG-Info,
-		ss-Data	        [3] Ext-SS-Data,
-		emlpp-Info      [4] EMLPP-Info}
-*/
-/*
-type ExtSSInfo []byte
-
-func (i ExtSSInfo) String() string {
-	return fmt.Sprintf("%x", []byte(i))
-}
-
-func (i *ExtSSInfo) UnmarshalJSON(b []byte) (e error) {
-	var s string
-	if e = json.Unmarshal(b, &s); e != nil {
-		return
-	}
-	var tmp []byte
-	if tmp, e = hex.DecodeString(s); e != nil {
-		return
-	}
-	*i = ExtSSInfo(tmp)
-	return
-}
-
-func (c ExtSSInfo) MarshalJSON() ([]byte, error) {
-	return json.Marshal(hex.EncodeToString(c))
-}
-*/
-type ssInfo interface {
-	GetType() string
-	marshal() []byte
 }
 
 /*
