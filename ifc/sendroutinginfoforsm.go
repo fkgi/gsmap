@@ -296,7 +296,7 @@ mwd-Set must be absent in version greater 1.
 type RoutingInfoForSmRes struct {
 	InvokeID int8 `json:"id"`
 
-	IMSI         teldata.TBCD         `json:"imsi"`
+	IMSI         teldata.IMSI         `json:"imsi"`
 	LocationInfo LocationInfoWithLMSI `json:"locationInfoWithLMSI"`
 	MWD          bool                 `json:"mwd-Set,omitempty"`
 	// Extension ExtensionContainer `json:"extensionContainer,omitempty"`
@@ -387,7 +387,7 @@ func (RoutingInfoForSmRes) Unmarshal(id int8, buf *bytes.Buffer) (gsmap.ReturnRe
 	if _, v, e := gsmap.ReadTLV(buf, 0x04); e != nil {
 		return nil, e
 	} else {
-		sri.IMSI = v
+		sri.IMSI, e = teldata.DecodeIMSI(v)
 	}
 
 	// locationInfoWithLMSI, context_specific(80) + constructed(20) + 0(00)
