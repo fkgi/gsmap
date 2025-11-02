@@ -73,7 +73,7 @@ func init() {
 		log.Printf("[INFO] Rx DAVA for PC=%v", pc)
 	}
 	xua.DaudNotify = func(pc []xua.PointCode) {
-		log.Printf("[INFO] Rx DAUD for PC=%v", pc)
+		log.Printf("[INFO] Tx DAUD for PC=%v", pc)
 	}
 	xua.SconNotify = func(pc []xua.PointCode, con uint32) {
 		log.Printf("[INFO] Rx SCON for PC=%v, congestion level=%d", pc, con)

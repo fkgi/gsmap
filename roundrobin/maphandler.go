@@ -24,7 +24,7 @@ func handleIncomingDialog(t *tcap.Transaction, cp []gsmap.Component) ([]gsmap.Co
 
 	jsondata, e := writeToJSON(nil, &t.CdPA, cp)
 	if e != nil {
-		log.Println("[ERROR]", "failed to unmarshal JSON:", e)
+		log.Println("[ERROR]", "failed to marshal JSON:", e)
 		return []gsmap.Component{
 				&gsmap.SystemFailure{InvokeID: t.LastInvokeID}},
 			nil
