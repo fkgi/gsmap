@@ -98,13 +98,13 @@ func (sri RoutingInfoForSmArg) String() string {
 	}
 	// Extension
 	if sri.SupportGPRS {
-		fmt.Fprint(buf, "\n| gprsSupportIndicator:")
+		fmt.Fprintf(buf, "\n%sgprsSupportIndicator:", gsmap.LogPrefix)
 	}
 	if sri.SMRPMTI != 0 {
-		fmt.Fprint(buf, "\n| sm-RP-MTI:           ", sri.SMRPMTI)
+		fmt.Fprintf(buf, "\n%ssm-RP-MTI:           %s", gsmap.LogPrefix, sri.SMRPMTI)
 	}
 	if len(sri.SMRPSMEA) != 0 {
-		fmt.Fprint(buf, "\n| sm-RP-SMEA:          ", sri.SMRPSMEA)
+		fmt.Fprintf(buf, "\n%ssm-RP-SMEA:          %s", gsmap.LogPrefix, sri.SMRPSMEA)
 	}
 	return buf.String()
 }
@@ -386,8 +386,8 @@ func (RoutingInfoForSmRes) Unmarshal(id int8, buf *bytes.Buffer) (gsmap.ReturnRe
 	// imsi, universal(00) + primitive(00) + octet_string(04)
 	if _, v, e := gsmap.ReadTLV(buf, 0x04); e != nil {
 		return nil, e
-	} else {
-		sri.IMSI, e = teldata.DecodeIMSI(v)
+	} else if sri.IMSI, e = teldata.DecodeIMSI(v); e != nil {
+		return nil, e
 	}
 
 	// locationInfoWithLMSI, context_specific(80) + constructed(20) + 0(00)
