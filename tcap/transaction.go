@@ -196,6 +196,7 @@ func acceptTC(msg *TcBegin, cgpa xua.SCCPAddr) {
 			t.deregister()
 			return
 		}
+		dres = nil
 
 		timer := time.AfterFunc(Tw, func() {
 			t.rxStack <- &TcAbort{dtid: t.otid, pCause: TcTimeout}

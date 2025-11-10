@@ -47,7 +47,7 @@ func handleIncomingDialog(t *tcap.Transaction, cp []gsmap.Component) ([]gsmap.Co
 	case http.StatusNotAcceptable:
 		return []gsmap.Component{}, nil
 	default:
-		log.Println("[ERROR]", "error from backend:", r.StatusCode, r.Status)
+		log.Println("[ERROR]", "error from backend:", r.Status)
 		return []gsmap.Component{
 				&gsmap.SystemFailure{InvokeID: t.LastInvokeID}},
 			nil
