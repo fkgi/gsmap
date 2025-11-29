@@ -75,7 +75,7 @@ func (m *ASPAC) handleResult(msg message) {
 	case *ERR:
 		m.result <- fmt.Errorf("error with code %d", res.code)
 	case *ASPACAck:
-		if res.mode != m.mode {
+		if res.mode != 0 && res.mode != m.mode {
 			m.result <- fmt.Errorf("traffic mode missmatch")
 		} else {
 			m.result <- nil
