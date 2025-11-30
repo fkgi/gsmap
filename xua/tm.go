@@ -70,7 +70,7 @@ Unitdata Service (UDTS)
 	Data                  V 2– octets
 */
 type DATA struct {
-	// na  *uint32
+	na  *uint32
 	ctx uint32
 
 	opc uint32
@@ -131,9 +131,9 @@ func (m *TxDATA) marshal() (uint8, uint8, []byte) {
 	buf := new(bytes.Buffer)
 
 	// Network Appearance (Optional)
-	//if m.na != nil {
-	//	writeUint32(buf, 0x0200, *m.na)
-	//}
+	if m.na != nil {
+		writeUint32(buf, 0x0200, *m.na)
+	}
 
 	// Routing Context
 	writeUint32(buf, 0x0006, m.ctx)
@@ -212,8 +212,8 @@ func (m *RxDATA) handleMessage(c *ASP) {
 
 func (m *RxDATA) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
-	//case 0x0200: // Network Appearance (Optional)
-	//	*m.na, e = readUint32(r, l)
+	case 0x0200: // Network Appearance (Optional)
+		*m.na, e = readUint32(r, l)
 	case 0x0006: // Routing Context
 		m.ctx, e = readUint32(r, l)
 	case 0x0210: // Protocol Data

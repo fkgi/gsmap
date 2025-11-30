@@ -21,6 +21,7 @@ var (
 	LocalPC       uint32   // local Point Code
 	SLSMask       uint32   = 0x0000000f
 	Network       uint8    = 0
+	Appearance    int      = -1
 )
 
 /*
@@ -373,7 +374,13 @@ func (c *ASP) Write(cdpa SCCPAddr, data []byte) {
 				cdpa: cdpa,
 				data: data}}
 	} else {
+		var na *uint32
+		if Appearance >= 0 {
+			tmp := uint32(Appearance)
+			na = &tmp
+		}
 		c.msgQ <- &TxDATA{
+			na:            na,
 			ctx:           c.Context,
 			opc:           LocalPC,
 			dpc:           c.PointCode,

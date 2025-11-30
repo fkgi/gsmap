@@ -31,6 +31,8 @@ func main() {
 	rc := flag.Uint("r", 0, "routing context")
 	ppc := flag.Uint("c", 0, "peer point code")
 	lpc := flag.Uint("d", 0, "local point code")
+	ni := flag.Uint("i", 0, "network indicator")
+	na := flag.Int("n", -1, "network appearance")
 	gt := flag.String("g", "", "global title address")
 	ssn := flag.String("s", "", "subsystem number msc|hlr|vlr")
 	api := flag.String("a", ":8080", "local API port")
@@ -40,6 +42,13 @@ func main() {
 	flag.Parse()
 
 	log.Println("[INFO]", "booting Round-Robin debugger for MAP...")
+
+	if *ni > 0 && *ni < 4 {
+		xua.Network = uint8(*ni)
+	}
+	if *na >= 0 {
+		xua.Appearance = *na
+	}
 
 	la, e := xua.ParseSCTPAddr(*l)
 	if e != nil {
