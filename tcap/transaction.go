@@ -30,8 +30,6 @@ type Transaction struct {
 	LastInvokeID int8
 }
 
-type ComponentHandler func(*Transaction, []gsmap.Component, error)
-
 func (t *Transaction) GetContext() gsmap.AppContext {
 	return t.ctx
 }
@@ -176,10 +174,14 @@ func acceptTC(msg *TcBegin, cgpa xua.SCCPAddr) {
 		}
 	} else if dlg, ok := msg.dialogue.(*AARQ); ok {
 		dres = DialogueHandler(*dlg)
-		if re, ok := dres.(*AARE); !ok || re.Result != Accept {
-			send(cgpa, &TcEnd{
-				dtid:     t.dtid,
-				dialogue: dres})
+		if re, ok := dres.(*ABRT); ok {
+			send(cgpa, &TcAbort{dtid: t.dtid, uCause: re})
+			return
+		} else if re, ok := dres.(*AARE); !ok {
+			send(cgpa, &TcAbort{dtid: t.dtid, pCause: TcUnrecognizedMessageType})
+			return
+		} else if re.Result != Accept {
+			send(cgpa, &TcEnd{dtid: t.dtid, dialogue: dres})
 			return
 		} else {
 			t.ctx = re.Context
@@ -187,86 +189,90 @@ func acceptTC(msg *TcBegin, cgpa xua.SCCPAddr) {
 	}
 	t.register()
 
-	var reqCp []gsmap.Component
-	if len(msg.component) == 0 {
-		if send(cgpa, &TcContinue{
-			otid:     t.otid,
-			dtid:     t.dtid,
-			dialogue: dres}) != nil {
-			t.deregister()
-			return
-		}
-		dres = nil
+	/*
+		var reqCp []gsmap.Component
+		if len(msg.component) == 0 {
+			if send(cgpa, &TcContinue{
+				otid:     t.otid,
+				dtid:     t.dtid,
+				dialogue: dres}) != nil {
+				t.deregister()
+				return
+			}
+			dres = nil
 
+			timer := time.AfterFunc(Tw, func() {
+				t.rxStack <- &TcAbort{dtid: t.otid, pCause: TcTimeout}
+			})
+			res := <-t.rxStack
+			timer.Stop()
+
+			switch res.(type) {
+			case *TcContinue:
+				reqCp = res.Components()
+			case *TcEnd:
+				// ToDo: End with first component
+				NewInvoke(t, res.Components())
+				t.deregister()
+				return
+			case *TcAbort:
+				t.deregister()
+				return
+			default:
+				panic("unexpected response")
+			}
+		} else {
+			reqCp = msg.component
+		}
+
+		cres, following := NewInvoke(t, reqCp)
+	*/
+	if cres, enwctx, following := NewInvoke(t, msg.component); enwctx != 0 {
+		send(cgpa, &TcAbort{
+			dtid: t.dtid,
+			uCause: &AARE{
+				Context:   enwctx,
+				Result:    RejectPermanent,
+				ResultSrc: SrcUsrACNameNotSupported}})
+		t.deregister()
+	} else if cres == nil {
+		t.Discard()
+	} else if len(cres) == 0 && len(msg.component) != 0 {
+		t.Reject()
+	} else if len(cres) == 0 && len(msg.component) == 0 && following == nil {
+		t.Reject()
+	} else if following == nil {
+		send(cgpa, &TcEnd{
+			dtid:      t.dtid,
+			dialogue:  dres,
+			component: cres})
+		t.deregister()
+	} else if send(cgpa, &TcContinue{
+		otid:      t.otid,
+		dtid:      t.dtid,
+		dialogue:  dres,
+		component: cres}) != nil {
+		t.deregister()
+	} else {
 		timer := time.AfterFunc(Tw, func() {
 			t.rxStack <- &TcAbort{dtid: t.otid, pCause: TcTimeout}
 		})
 		res := <-t.rxStack
 		timer.Stop()
 
-		switch res.(type) {
+		switch m := res.(type) {
 		case *TcContinue:
-			reqCp = res.Components()
+			following(t, m.component, nil)
 		case *TcEnd:
-			// ToDo: End with first component
-			NewInvoke(t, res.Components())
-			t.deregister()
-			return
+			following(t, m.component, io.EOF)
 		case *TcAbort:
-			t.deregister()
-			return
+			if m.pCause == TcTimeout {
+				following(t, nil, errors.New("timeout"))
+			} else {
+				following(t, nil, errors.New(m.String()))
+			}
 		default:
 			panic("unexpected response")
 		}
-	} else {
-		reqCp = msg.component
-	}
-
-	cres, following := NewInvoke(t, reqCp)
-	if cres == nil {
-		t.Discard()
-		return
-	} else if len(cres) == 0 {
-		t.Reject()
-		return
-	}
-
-	if following == nil {
-		send(cgpa, &TcEnd{
-			dtid:      t.dtid,
-			dialogue:  dres,
-			component: cres})
-		t.deregister()
-		return
-	}
-
-	if send(cgpa, &TcContinue{
-		otid:      t.otid,
-		dtid:      t.dtid,
-		dialogue:  dres,
-		component: cres}) != nil {
-		t.deregister()
-		return
-	}
-
-	timer := time.AfterFunc(Tw, func() {
-		t.rxStack <- &TcAbort{dtid: t.otid, pCause: TcTimeout}
-	})
-	res := <-t.rxStack
-	timer.Stop()
-
-	switch m := res.(type) {
-	case *TcContinue:
-		following(t, m.component, nil)
-	case *TcEnd:
-		following(t, m.component, io.EOF)
-	case *TcAbort:
-		if m.pCause == TcTimeout {
-			following(t, nil, errors.New("timeout"))
-		} else {
-			following(t, nil, errors.New(m.String()))
-		}
-	default:
-		panic("unexpected response")
 	}
 }

@@ -138,11 +138,7 @@ func main() {
 				ResultSrc: tcap.SrcUsrNull}
 		}
 		log.Println("[INFO]", "unsupported application context is required: ", q.Context)
-		return &tcap.AARE{
-			Context:   q.Context,
-			Result:    tcap.RejectPermanent,
-			ResultSrc: tcap.SrcUsrNull,
-		}
+		return &tcap.ABRT{Source: tcap.SvcUser}
 	}
 
 	/*

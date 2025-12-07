@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/fkgi/gsmap"
 	"github.com/fkgi/gsmap/tcap"
@@ -12,68 +13,79 @@ import (
 
 var client http.Client
 
-func handleIncomingDialog(t *tcap.Transaction, cp []gsmap.Component) ([]gsmap.Component, tcap.ComponentHandler) {
+func handleIncomingDialog(t *tcap.Transaction, cp []gsmap.Component) (
+	[]gsmap.Component, gsmap.AppContext, tcap.ComponentHandler) {
+
 	n, v := getContextName(t.GetContext())
 	if *verbose {
 		log.Println("[INFO]", "Rx new dialog", n, v)
 	}
 
-	if iv, ok := cp[0].(gsmap.Invoke); ok {
+	var internalErr []gsmap.Component
+	if len(cp) == 0 {
+		internalErr = []gsmap.Component{}
+	} else if iv, ok := cp[0].(gsmap.Invoke); ok {
 		t.LastInvokeID = iv.GetInvokeID()
+		internalErr = []gsmap.Component{
+			&gsmap.SystemFailure{InvokeID: t.LastInvokeID}}
 	}
 
 	jsondata, e := writeToJSON(nil, &t.CdPA, cp)
 	if e != nil {
 		log.Println("[ERROR]", "failed to marshal JSON:", e)
-		return []gsmap.Component{
-				&gsmap.SystemFailure{InvokeID: t.LastInvokeID}},
-			nil
+		return internalErr, 0, nil
 	}
 
 	r, e := client.Post(backend+"/mapmsg/v1/"+n+"/"+v,
 		"application/json", bytes.NewBuffer(jsondata))
 	if e != nil {
 		log.Println("[ERROR]", "failed to access to backend:", e)
-		return []gsmap.Component{
-				&gsmap.SystemFailure{InvokeID: t.LastInvokeID}},
-			nil
+		return internalErr, 0, nil
 	}
 	defer r.Body.Close()
 
 	switch r.StatusCode {
 	case http.StatusOK, http.StatusCreated:
+	case http.StatusMovedPermanently:
+		if path := r.Header.Get("Location"); path == "" {
+			log.Println("[ERROR]", "missing Location header in backend response")
+			return internalErr, 0, nil
+		} else if _, a, ok := strings.Cut(path, "mapmsg/v1/"); !ok || len(a) == 0 {
+			log.Println("[ERROR]", "invalid Location header in backend response:", path)
+			return internalErr, 0, nil
+		} else if n, v, ok = strings.Cut(a, "/"); !ok || len(v) == 0 {
+			log.Println("[ERROR]", "invalid Location header in backend response:", path)
+			return internalErr, 0, nil
+		} else {
+			v, _, _ = strings.Cut(v, "/")
+		}
+		return []gsmap.Component{}, getContext(n, v), nil
 	case http.StatusServiceUnavailable:
-		return nil, nil
+		return nil, 0, nil
 	case http.StatusNotAcceptable:
-		return []gsmap.Component{}, nil
+		return []gsmap.Component{}, 0, nil
 	default:
 		log.Println("[ERROR]", "error from backend:", r.Status)
-		return []gsmap.Component{
-				&gsmap.SystemFailure{InvokeID: t.LastInvokeID}},
-			nil
+		return internalErr, 0, nil
 	}
 
 	jsondata, e = io.ReadAll(r.Body)
 	if e != nil {
 		log.Println("[ERROR]", "failed to get data from backend:", e)
-		return []gsmap.Component{
-				&gsmap.SystemFailure{InvokeID: t.LastInvokeID}},
-			nil
+		return internalErr, 0, nil
 	}
 	_, _, cp, e = readFromJSON(jsondata, t.LastInvokeID)
 	if e != nil {
 		log.Println("[ERROR]", "failed to unmarshal JSON:", e)
-		return []gsmap.Component{
-				&gsmap.SystemFailure{}},
-			nil
+		return internalErr, 0, nil
 	}
 
 	if r.StatusCode == http.StatusOK {
-		return cp, nil
+		return cp, 0, nil
 	}
 
 	path := r.Header.Get("Location")
-	return cp, func(t *tcap.Transaction, cp []gsmap.Component, e error) {
+	return cp, 0, func(t *tcap.Transaction, cp []gsmap.Component, e error) {
 		following(t, cp, e, path)
 	}
 }

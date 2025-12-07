@@ -13,24 +13,17 @@ var (
 	Tw = time.Second * 30
 )
 
-// Tx or Rx.
-type Direction bool
+type ComponentHandler func(*Transaction, []gsmap.Component, error)
 
-func (v Direction) String() string {
-	if v {
-		return "Tx"
-	}
-	return "Rx"
+/*
+If response Component is nil, the dialog will be discarded (no response).
+If response Component is empty slice, the dialog will be rejected (TC-Abort).
+If response Component has elements, the dialog will be responded with the given components.
+*/
+var NewInvoke = func(*Transaction, []gsmap.Component) ([]gsmap.Component, gsmap.AppContext, ComponentHandler) {
+	return []gsmap.Component{}, 0, nil
 }
 
-const (
-	Tx Direction = true
-	Rx Direction = false
-)
-
-var NewInvoke = func(*Transaction, []gsmap.Component) ([]gsmap.Component, ComponentHandler) {
-	return []gsmap.Component{}, nil
-}
 var SelectASP = func() *xua.ASP {
 	return nil
 }
