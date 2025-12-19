@@ -213,6 +213,7 @@ func (m *RxDATA) handleMessage(c *ASP) {
 func (m *RxDATA) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
 	case 0x0200: // Network Appearance (Optional)
+		m.na = new(uint32)
 		*m.na, e = readUint32(r, l)
 	case 0x0006: // Routing Context
 		m.ctx, e = readUint32(r, l)
