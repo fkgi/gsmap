@@ -173,8 +173,6 @@ func (rsds ReportSmDeliveryStatusArg) MarshalParam() []byte {
 	// additionalSM-DeliveryOutcome, context_specific(80) + primitive(00) + 4(04)
 	if tmp := rsds.AdditionalOutcome.marshal(); tmp != nil {
 		gsmap.WriteTLV(buf, 0x84, tmp)
-	} else {
-		gsmap.WriteTLV(buf, 0x84, []byte{0x00})
 	}
 
 	// additionalAbsentSubscriberDiagnosticSM, context_specific(80) + primitive(00) + 5(05)

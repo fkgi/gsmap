@@ -43,6 +43,7 @@ func main() {
 
 	log.Println("[INFO]", "booting Round-Robin debugger for MAP...")
 
+	xua.ReturnOnError = true
 	if *ni > 0 && *ni < 4 {
 		xua.Network = uint8(*ni)
 	}
