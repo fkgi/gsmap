@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -20,14 +21,24 @@ import (
 )
 
 var (
-	asp     = xua.ASP{}
 	backend string
 	verbose *bool
 )
 
+type list []string
+
+func (a *list) String() string {
+	return fmt.Sprintf("%v", *a)
+}
+func (a *list) Set(v string) error {
+	*a = append(*a, v)
+	return nil
+}
+
 func main() {
+	var peerAddrs list
 	l := flag.String("l", "", "local address")
-	p := flag.String("p", "", "peer address")
+	flag.Var(&peerAddrs, "p", "peer address")
 	rc := flag.Uint("r", 0, "routing context")
 	ppc := flag.Uint("c", 0, "peer point code")
 	lpc := flag.Uint("d", 0, "local point code")
@@ -43,54 +54,60 @@ func main() {
 
 	log.Println("[INFO]", "booting Round-Robin debugger for MAP...")
 
-	xua.ReturnOnError = true
-	if *ni > 0 && *ni < 4 {
-		xua.Network = uint8(*ni)
-	}
-	if *na >= 0 {
-		xua.Appearance = *na
-	}
-
 	la, e := xua.ParseSCTPAddr(*l)
 	if e != nil {
 		log.Fatalln("[ERROR]", "invalid local address:", e)
 	}
-	pa, e := xua.ParseSCTPAddr(*p)
-	if e != nil {
-		log.Fatalln("[ERROR]", "invalid peer address:", e)
+	pa := make([]*xua.SCTPAddr, 0, len(peerAddrs))
+	for _, a := range peerAddrs {
+		p, e := xua.ParseSCTPAddr(a)
+		if e != nil {
+			log.Fatalln("[ERROR]", "invalid peer address:", e)
+		}
+		pa = append(pa, p)
 	}
 
-	xua.LocalAddr.GlobalTitle.NatureOfAddress = teldata.International
-	xua.LocalAddr.GlobalTitle.NumberingPlan = teldata.ISDNTelephony
-	if xua.LocalAddr.GlobalTitle.Digits, e = teldata.ParseTBCD(*gt); e != nil {
+	if *lpc == 0 || *ppc == 0 {
+		log.Fatalln("[ERROR]", "point code is not specified")
+	}
+	if *rc == 0 {
+		log.Fatalln("[ERROR]", "routing context is not specified")
+	}
+
+	tcap.EndPoint, e = xua.NewSignalingEndpoint(la)
+	if e != nil {
+		log.Fatalln("[ERROR]", "failed to bind:", e)
+	}
+	tcap.EndPoint.ReturnOnError = true
+	if *ni > 0 && *ni < 4 {
+		tcap.EndPoint.NetIndicator = uint8(*ni)
+	}
+	if *na >= 0 {
+		tmp := uint32(*na)
+		tcap.EndPoint.NetAppearance = &tmp
+	}
+	tcap.EndPoint.PayloadHandler = tcap.HandlePayload
+
+	tcap.EndPoint.GlobalTitle.NatureOfAddress = teldata.International
+	tcap.EndPoint.GlobalTitle.NumberingPlan = teldata.ISDNTelephony
+	if tcap.EndPoint.GlobalTitle.Digits, e = teldata.ParseTBCD(*gt); e != nil {
 		log.Fatalln("[ERROR]", "invalid global title address:", e)
 	}
 	switch *ssn {
 	case "msc":
-		xua.LocalAddr.SubsystemNumber = teldata.SsnMSC
+		tcap.EndPoint.SubsystemNumber = teldata.SsnMSC
 	case "hlr":
-		xua.LocalAddr.SubsystemNumber = teldata.SsnHLR
+		tcap.EndPoint.SubsystemNumber = teldata.SsnHLR
 	case "vlr":
-		xua.LocalAddr.SubsystemNumber = teldata.SsnVLR
+		tcap.EndPoint.SubsystemNumber = teldata.SsnVLR
 	case "":
 	default:
 		log.Fatalln("[ERROR]", "invalid subsystem number")
 	}
 
-	xua.LocalPC = uint32(*lpc)
-	asp.PointCode = uint32(*ppc)
-	asp.Context = uint32(*rc)
-
-	if asp.PointCode != 0 && xua.LocalPC == 0 {
-		log.Fatalln("[ERROR]", "local point code is not specified")
-	}
-	if asp.Context == 0 {
-		log.Fatalln("[ERROR]", "routing context is not specified")
-	}
-
-	tcap.SelectASP = func() *xua.ASP {
-		return &asp
-	}
+	tcap.EndPoint.PointCode = uint32(*lpc)
+	tcap.EndPoint.Context = uint32(*rc)
+	tcap.PeerPointCode = uint32(*ppc)
 
 	tcap.Tw = time.Duration(*to) * time.Second
 
@@ -156,19 +173,16 @@ func main() {
 		log.Fatalln(http.ListenAndServe(*api, nil))
 	}()
 
+	log.Println("[INFO]", "Connecting ASP")
+	for _, a := range pa {
+		if e = tcap.EndPoint.ConnectTo(a); e != nil {
+			log.Fatalln("ERROR", "failed to connect ASP:", e)
+		}
+	}
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	go func() {
-		<-sigc
-		if asp.State() == xua.Down {
-			os.Exit(0)
-		} else {
-			asp.Close()
-		}
-	}()
-
-	log.Println("[INFO]", "Connecting ASP")
-	log.Println("[INFO]", "closed, error=", asp.DialAndServe(la, pa))
+	<-sigc
+	tcap.EndPoint.Close()
 }
 
 func readFromJSON(d []byte, defaultID int8) (cdpa xua.SCCPAddr, cgpa *xua.SCCPAddr, cpnt []gsmap.Component, e error) {

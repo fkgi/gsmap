@@ -16,12 +16,7 @@ var (
 	tack = time.Second * 2 // Wait Response timer
 	// tbeat = time.Second * 30 // Heartbeat interval
 
-	ReturnOnError = false
-	LocalAddr     SCCPAddr // local GT address
-	LocalPC       uint32   // local Point Code
-	SLSMask       uint32   = 0x0000000f
-	Network       uint8    = 0
-	Appearance    int      = -1
+	SLSMask uint32 = 0x0000000f
 )
 
 /*
@@ -58,16 +53,69 @@ type rxMessage interface {
 	unmarshal(uint16, uint16, io.ReadSeeker) error
 }
 
+func getRxMessage(c, t byte) rxMessage {
+	switch c {
+	case 0x00:
+		switch t {
+		case 0x00:
+			return new(ERR)
+		case 0x01:
+			return new(NTFY)
+		}
+	case 0x01:
+		switch t {
+		case 0x01:
+			return new(RxDATA)
+		}
+	case 0x02:
+		switch t {
+		case 0x01:
+			return new(DUNA)
+		case 0x02:
+			return new(DAVA)
+		case 0x04:
+			return new(SCON)
+		case 0x05:
+			return new(DUPU)
+		case 0x06:
+			return new(DRST)
+		}
+	case 0x03:
+		switch t {
+		case 0x03:
+			return new(RxBEAT)
+		case 0x04:
+			return new(ASPUPAck)
+		case 0x05:
+			return new(ASPDNAck)
+		case 0x06:
+			return new(RxBEATAck)
+		}
+	case 0x04:
+		switch t {
+		case 0x03:
+			return new(ASPACAck)
+		case 0x04:
+			return new(ASPIAAck)
+		}
+	}
+	return nil
+}
+
 type ASP struct {
-	sock    int
+	id   byte
+	sock int
+
+	gt SCCPAddr
+
 	msgQ    chan message
 	ctrlMsg txMessage
 
-	Context   uint32
-	PointCode uint32
+	handler func(SCCPAddr, SCCPAddr, []byte)
 
-	state    Status
-	sequence chan uint32
+	state     Status
+	statNotif chan Status
+	sequence  chan uint32
 
 	TxTransfer uint64
 	RxTransfer uint64
@@ -95,128 +143,107 @@ func (c *ASP) RemoteAddr() net.Addr {
 	return resolveFromRawAddr(ptr, n)
 }
 
-func (c *ASP) DialAndServe(la, pa *SCTPAddr) (e error) {
+/*
+func NewASP(gt SCCPAddr) *ASP {
+	c := &ASP{
+		//sock:     s,
+		gt: gt}
+	return c
+}
+*/
+
+func (c *ASP) connectAndServe(ctx uint32, sharedQ chan userData) {
 	c.msgQ = make(chan message, 1024)
 	c.ctrlMsg = nil
-	c.state = Down
+	c.state = 0
+	c.statNotif = make(chan Status, 256)
 	c.sequence = make(chan uint32, 1)
 	c.sequence <- 0
-
-	// dial SCTP
-	if la == nil || pa == nil || len(la.IP) == 0 || len(pa.IP) == 0 {
-		e = fmt.Errorf("nil address")
-	} else if la.IP[0].To4() != nil && pa.IP[0].To4() != nil {
-		c.sock, e = sockOpenV4()
-	} else if la.IP[0].To16() != nil && pa.IP[0].To16() != nil {
-		c.sock, e = sockOpenV6()
-	} else {
-		e = fmt.Errorf("invalid address")
-	}
-	if e != nil {
-		e = &net.OpError{Op: "dial", Net: "sctp", Source: la, Addr: pa, Err: e}
-		return
-	}
-	if e = sctpBindx(c.sock, la.rawBytes()); e != nil {
-		_ = sockClose(c.sock)
-		e = &net.OpError{Op: "dial", Net: "sctp", Source: la, Addr: pa, Err: e}
-		return
-	}
-	if e = sctpConnectx(c.sock, pa.rawBytes()); e != nil {
-		_ = sockClose(c.sock)
-		e = &net.OpError{Op: "dial", Net: "sctp", Source: la, Addr: pa, Err: e}
-		return
-	}
 
 	go func() { // event procedure
 		for m, ok := <-c.msgQ; ok; m, ok = <-c.msgQ {
 			m.handleMessage(c)
 		}
 	}()
-	go func() {
-		r := make(chan error, 1)
-		c.msgQ <- &ASPUP{result: r}
-		e = <-r
-		if AspUpNotify != nil {
-			AspUpNotify(la, pa, e)
-		}
-		if e != nil {
-			_ = sockClose(c.sock)
-			return
+
+	// connect procedure
+	c.msgQ <- &NTFY{status: Down}
+	<-c.statNotif
+
+	// ASP up
+	r := make(chan error, 1)
+	c.msgQ <- &ASPUP{result: r}
+
+	go func() { // rx data procedure
+		for {
+			data, e := sctpRecvmsg(c.sock)
+			if eno, ok := e.(*syscall.Errno); ok && eno.Temporary() {
+				continue
+			} else if e != nil {
+				break
+			} else if data[0] != 1 || len(data) < 8 {
+				if RxFailureNotify != nil {
+					RxFailureNotify(fmt.Errorf("invalid lengh of data"), data)
+				}
+				continue
+			}
+
+			m := getRxMessage(data[2], data[3])
+			if m == nil {
+				if RxFailureNotify != nil {
+					RxFailureNotify(fmt.Errorf("unknown message: %x-%x", data[2], data[3]), data)
+				}
+				continue
+			}
+
+			for r := bytes.NewReader(data[8 : uint32(data[4])<<24|uint32(data[5])<<16|uint32(data[6])<<8|uint32(data[7])]); r.Len() > 4; {
+				var t, l uint16
+				binary.Read(r, binary.BigEndian, &t)
+				binary.Read(r, binary.BigEndian, &l)
+				l -= 4
+
+				if e := m.unmarshal(t, l, r); e != nil {
+					if RxFailureNotify != nil {
+						RxFailureNotify(fmt.Errorf("invalid data for tag %x: %v", t, e), data)
+					}
+				}
+				if l%4 != 0 {
+					r.Seek(int64(4-l%4), io.SeekCurrent)
+				}
+			}
+
+			if msg, ok := m.(*RxDATA); ok && msg.cause == Success && msg.protocolClass == 0 {
+				c.RxTransfer++
+				sharedQ <- msg.userData
+			} else {
+				c.msgQ <- m
+			}
 		}
 
-		r = make(chan error, 1)
-		c.msgQ <- &ASPAC{mode: Loadshare, ctx: c.Context, result: r}
-		e = <-r
-		if AsUpNotify != nil {
-			AsUpNotify(c.Context, e)
-		}
-		if e != nil {
-			_ = sockClose(c.sock)
-		}
+		c.msgQ <- &NTFY{status: Down}
+		close(c.msgQ)
 	}()
 
-	for { // rx data procedure
-		buf := make([]byte, 1500)
+	if <-r != nil {
+		return
+	}
 
-		n, e := sctpRecvmsg(c.sock, buf)
-		if eno, ok := e.(*syscall.Errno); ok && eno.Temporary() {
-			continue
-		}
-		if e != nil {
-			break
-		}
-
-		m, e := readHandler(buf[:n])
-		if e != nil {
-			_ = sockClose(c.sock)
-			break
-		}
-
-		if msg, ok := m.(*RxCLDT); ok && msg.protocolClass == 0 {
-			c.RxTransfer++
-			if PayloadHandler != nil {
-				sharedQ <- msg.userData
-			} else if msg.returnOnError {
-				c.msgQ <- &TxCLDR{
-					ctx:   msg.ctx,
-					cause: SubsystemFailure,
-					userData: userData{
-						cgpa: LocalAddr,
-						cdpa: msg.cgpa,
-						data: msg.data}}
+	for {
+		switch <-c.statNotif {
+		case Inactive:
+			// ASP active
+			r = make(chan error, 1)
+			c.msgQ <- &ASPAC{mode: Loadshare, ctx: ctx, result: r}
+			if <-r != nil {
+				return
 			}
-		} else if msg, ok := m.(*RxDATA); ok && msg.cause == Success && msg.protocolClass == 0 {
-			c.RxTransfer++
-			if PayloadHandler != nil {
-				sharedQ <- msg.userData
-			} else if msg.returnOnError {
-				c.msgQ <- &TxDATA{
-					ctx:   msg.ctx,
-					cause: SubsystemFailure,
-					userData: userData{
-						cgpa: LocalAddr,
-						cdpa: msg.cgpa,
-						data: msg.data}}
-			}
-		} else {
-			c.msgQ <- m
+		case 0, Down:
+			return
 		}
 	}
-	c.state = Down
-	close(c.msgQ)
-
-	return
 }
 
-func (c *ASP) Close() error {
-	r := make(chan error, 1)
-	c.msgQ <- &ASPDN{result: r}
-	<-r
-
-	return sockClose(c.sock)
-}
-
-func handleCtrlReq(c *ASP, m txMessage) (e error) {
+func (c *ASP) handleCtrlReq(m txMessage) (e error) {
 	if c.ctrlMsg != nil {
 		e = errors.New("any other request is waiting answer")
 		return
@@ -238,158 +265,22 @@ func handleCtrlReq(c *ASP, m txMessage) (e error) {
 	// Message Data
 	buf.Write(b)
 
-	if _, e = sctpSend(c.sock, buf.Bytes(), 0, c.PointCode != 0); e != nil {
+	if _, e = sctpSend(c.sock, buf.Bytes(), 0); e != nil {
 		return
 	}
 
 	c.ctrlMsg = m
 	time.AfterFunc(tack, func() {
 		if c.ctrlMsg == m {
-			// Protocol Error
-			c.msgQ <- &ERR{code: 0x07}
+			c.msgQ <- &ERR{code: ProtocolError}
 		}
 	})
 	return
 }
 
-func handleCtrlAns(c *ASP, m message) {
+func (c *ASP) handleCtrlAns(m message) {
 	if c.ctrlMsg != nil {
 		c.ctrlMsg.handleResult(m)
 		c.ctrlMsg = nil
-	}
-}
-
-func readHandler(buf []byte) (m rxMessage, e error) {
-	if buf[0] != 1 || len(buf) < 8 {
-		e = errors.New("invalid version")
-		return
-	}
-
-	r := bytes.NewReader(buf[4:])
-	var l uint32
-	if e = binary.Read(r, binary.BigEndian, &l); e != nil {
-		return
-	}
-
-	switch buf[2] {
-	case 0x00:
-		switch buf[3] {
-		case 0x00:
-			m = new(ERR)
-		case 0x01:
-			m = new(NTFY)
-		}
-	case 0x01:
-		switch buf[3] {
-		case 0x01:
-			m = new(RxDATA)
-		}
-	case 0x02:
-		switch buf[3] {
-		case 0x01:
-			m = new(DUNA)
-		case 0x02:
-			m = new(DAVA)
-		case 0x04:
-			m = new(SCON)
-		case 0x05:
-			m = new(DUPU)
-		case 0x06:
-			m = new(DRST)
-		}
-	case 0x03:
-		switch buf[3] {
-		case 0x03:
-			m = new(RxBEAT)
-		case 0x04:
-			m = new(ASPUPAck)
-		case 0x05:
-			m = new(ASPDNAck)
-		case 0x06:
-			m = new(RxBEATAck)
-		}
-	case 0x04:
-		switch buf[3] {
-		case 0x03:
-			m = new(ASPACAck)
-		case 0x04:
-			m = new(ASPIAAck)
-		}
-	case 0x07:
-		switch buf[3] {
-		case 0x01:
-			m = new(RxCLDT)
-		case 0x02:
-			m = new(RxCLDR)
-		}
-	}
-
-	if m == nil {
-		e = errors.New("invalid message")
-		return
-	}
-
-	r = bytes.NewReader(buf[8:l])
-	for r.Len() > 4 {
-		var t, l uint16
-		if e := binary.Read(r, binary.BigEndian, &t); e != nil {
-			if RxFailureNotify != nil {
-				RxFailureNotify(fmt.Errorf("invalid tag: %v", e), buf)
-			}
-			break
-		}
-		if e := binary.Read(r, binary.BigEndian, &l); e != nil {
-			if RxFailureNotify != nil {
-				RxFailureNotify(fmt.Errorf("invalid length: %v", e), buf)
-			}
-			break
-		}
-		l -= 4
-
-		if e := m.unmarshal(t, l, r); e != nil {
-			if RxFailureNotify != nil {
-				RxFailureNotify(fmt.Errorf("invalid data: %v", e), buf)
-			}
-			break
-		}
-
-		if l%4 != 0 {
-			r.Seek(int64(4-l%4), io.SeekCurrent)
-		}
-	}
-	return
-}
-
-func (c *ASP) Write(cdpa SCCPAddr, data []byte) {
-	seq := <-c.sequence
-	c.sequence <- seq + 1
-
-	if c.PointCode == 0 {
-		c.msgQ <- &TxCLDT{
-			ctx:           c.Context,
-			returnOnError: ReturnOnError,
-			sequenceCtrl:  seq,
-			userData: userData{
-				cgpa: LocalAddr,
-				cdpa: cdpa,
-				data: data}}
-	} else {
-		var na *uint32
-		if Appearance >= 0 {
-			tmp := uint32(Appearance)
-			na = &tmp
-		}
-		c.msgQ <- &TxDATA{
-			na:            na,
-			ctx:           c.Context,
-			opc:           LocalPC,
-			dpc:           c.PointCode,
-			ni:            Network,
-			sls:           uint8(seq & SLSMask),
-			returnOnError: ReturnOnError,
-			userData: userData{
-				cgpa: LocalAddr,
-				cdpa: cdpa,
-				data: data}}
 	}
 }

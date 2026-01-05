@@ -1,12 +1,5 @@
 package xua
 
-import (
-	"bytes"
-	"encoding/binary"
-	"fmt"
-	"io"
-)
-
 /*
 CL: SCCP Connectionless (CL) Messages
 Message class = 0x07
@@ -66,7 +59,6 @@ CLDT is Connectionless Data Transfer message. (Message type = 0x01)
 	/                           * Data                              /
 	\                                                               \
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-*/
 type CLDT struct {
 	ctx           uint32
 	returnOnError bool
@@ -246,6 +238,7 @@ func (m *RxCLDT) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	}
 	return
 }
+*/
 
 /*
 CLDR is Connectionless Data Response message. (Message type = 0x02)
@@ -297,7 +290,6 @@ CLDR is Connectionless Data Response message. (Message type = 0x02)
 	/                             Data                              /
 	\                                                               \
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-*/
 type CLDR struct {
 	ctx   uint32
 	cause Cause
@@ -469,3 +461,4 @@ func (m *RxCLDR) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	}
 	return
 }
+*/

@@ -35,7 +35,7 @@ type ASPUP struct {
 }
 
 func (m *ASPUP) handleMessage(c *ASP) {
-	if e := handleCtrlReq(c, m); e != nil {
+	if e := c.handleCtrlReq(m); e != nil {
 		m.result <- e
 	}
 }
@@ -43,7 +43,7 @@ func (m *ASPUP) handleMessage(c *ASP) {
 func (m *ASPUP) handleResult(msg message) {
 	switch res := msg.(type) {
 	case *ERR:
-		m.result <- fmt.Errorf("error with code %d", res.code)
+		m.result <- fmt.Errorf("error with code %s", res.code)
 	case *ASPUPAck:
 		m.result <- nil
 	default:
@@ -86,7 +86,7 @@ type ASPDN struct {
 }
 
 func (m *ASPDN) handleMessage(c *ASP) {
-	if e := handleCtrlReq(c, m); e != nil {
+	if e := c.handleCtrlReq(m); e != nil {
 		m.result <- e
 	}
 }
@@ -94,7 +94,7 @@ func (m *ASPDN) handleMessage(c *ASP) {
 func (m *ASPDN) handleResult(msg message) {
 	switch res := msg.(type) {
 	case *ERR:
-		m.result <- fmt.Errorf("error with code %d", res.code)
+		m.result <- fmt.Errorf("error with code %s", res.code)
 	case *ASPDNAck:
 		m.result <- nil
 	default:
@@ -178,7 +178,7 @@ type ASPUPAck struct {
 	// info   string
 }
 
-func (m *ASPUPAck) handleMessage(c *ASP) { handleCtrlAns(c, m) }
+func (m *ASPUPAck) handleMessage(c *ASP) { c.handleCtrlAns(m) }
 
 func (m *ASPUPAck) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
@@ -206,7 +206,7 @@ type ASPDNAck struct {
 	// info   string
 }
 
-func (m *ASPDNAck) handleMessage(c *ASP) { handleCtrlAns(c, m) }
+func (m *ASPDNAck) handleMessage(c *ASP) { c.handleCtrlAns(m) }
 
 func (m *ASPDNAck) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {

@@ -24,115 +24,116 @@ var NewInvoke = func(*Transaction, []gsmap.Component) ([]gsmap.Component, gsmap.
 	return []gsmap.Component{}, 0, nil
 }
 
-var SelectASP = func() *xua.ASP {
-	return nil
-}
+var EndPoint *xua.SignalingEndpoint
+var PeerPointCode uint32
 
-func init() {
-	xua.PayloadHandler = func(cgpa xua.SCCPAddr, cdpa xua.SCCPAddr, data []byte) {
-		t, v, e := gsmap.ReadTLV(bytes.NewBuffer(data), 0x00)
-		if e != nil {
-			if RxFailureNotify != nil {
-				RxFailureNotify(fmt.Errorf("invalid data: %v", e), data)
-			}
-			return
+//var SelectASP = func() *xua.ASP {
+//	return nil
+//}
+
+func HandlePayload(cgpa xua.SCCPAddr, cdpa xua.SCCPAddr, data []byte) {
+	t, v, e := gsmap.ReadTLV(bytes.NewBuffer(data), 0x00)
+	if e != nil {
+		if RxFailureNotify != nil {
+			RxFailureNotify(fmt.Errorf("invalid data: %v", e), data)
+		}
+		return
+	}
+
+	switch t {
+	case 0x61: // Unidirectional
+		msg, e := unmarshalUnidirectional(v)
+		if e == nil {
+			e = fmt.Errorf("unidirectional is not supported")
+		}
+		if TraceMessage != nil {
+			TraceMessage(msg, Rx, e)
+		}
+		if e != nil && RxFailureNotify != nil {
+			RxFailureNotify(fmt.Errorf("invalid Unidirectional data: %v", e), data)
 		}
 
-		switch t {
-		case 0x61: // Unidirectional
-			msg, e := unmarshalUnidirectional(v)
-			if e == nil {
-				e = fmt.Errorf("unidirectional is not supported")
-			}
+	case 0x62: // Begin
+		msg, e := unmarshalTcBegin(v)
+		if TraceMessage != nil {
+			TraceMessage(msg, Rx, e)
+		}
+		if e != nil {
+			sendAbort(cgpa, msg.otid, TcBadlyFormattedTransactionPortion)
+		} else {
+			go acceptTC(msg, cgpa)
+		}
+		if e != nil && RxFailureNotify != nil {
+			RxFailureNotify(fmt.Errorf("invalid Begin data: %v", e), data)
+		}
+
+	case 0x64: // End
+		msg, e := unmarshalTcEnd(v)
+		var t *Transaction
+		if e != nil {
+		} else if t = GetTransaction(msg.dtid); t == nil {
+			e = fmt.Errorf("no active TC")
+		} else if len(t.rxStack) == cap(t.rxStack) {
+			e = fmt.Errorf("unexpected response")
+		}
+		if TraceMessage != nil {
+			TraceMessage(msg, Rx, e)
+		}
+		if e == nil {
+			t.CdPA = cgpa
+			t.rxStack <- msg
+			t.deregister()
+		}
+		if e != nil && RxFailureNotify != nil {
+			RxFailureNotify(fmt.Errorf("invalid End data: %v", e), data)
+		}
+
+	case 0x65: // Continue
+		if msg, e := unmarshalTcContinue(v); e != nil {
 			if TraceMessage != nil {
 				TraceMessage(msg, Rx, e)
 			}
-			if e != nil && RxFailureNotify != nil {
-				RxFailureNotify(fmt.Errorf("invalid Unidirectional data: %v", e), data)
-			}
+			sendAbort(cgpa, msg.otid, TcBadlyFormattedTransactionPortion)
 
-		case 0x62: // Begin
-			msg, e := unmarshalTcBegin(v)
+			if RxFailureNotify != nil {
+				RxFailureNotify(fmt.Errorf("invalid Continue data: %v", e), data)
+			}
+		} else if t := GetTransaction(msg.dtid); t == nil {
+			if TraceMessage != nil {
+				TraceMessage(msg, Rx, fmt.Errorf("no active TC"))
+			}
+			sendAbort(cgpa, msg.otid, TcUnrecognizedTransactionID)
+		} else if len(t.rxStack) == cap(t.rxStack) {
+			if TraceMessage != nil {
+				TraceMessage(msg, Rx, fmt.Errorf("unexpected response"))
+			}
+			sendAbort(cgpa, msg.otid, TcResourceLimitation)
+			t.deregister()
+		} else {
 			if TraceMessage != nil {
 				TraceMessage(msg, Rx, e)
 			}
-			if e != nil {
-				sendAbort(cgpa, msg.otid, TcBadlyFormattedTransactionPortion)
-			} else {
-				go acceptTC(msg, cgpa)
-			}
-			if e != nil && RxFailureNotify != nil {
-				RxFailureNotify(fmt.Errorf("invalid Begin data: %v", e), data)
-			}
+			t.CdPA = cgpa
+			t.rxStack <- msg
+		}
 
-		case 0x64: // End
-			msg, e := unmarshalTcEnd(v)
-			var t *Transaction
-			if e != nil {
-			} else if t = GetTransaction(msg.dtid); t == nil {
-				e = fmt.Errorf("no active TC")
-			} else if len(t.rxStack) == cap(t.rxStack) {
-				e = fmt.Errorf("unexpected response")
-			}
-			if TraceMessage != nil {
-				TraceMessage(msg, Rx, e)
-			}
-			if e == nil {
-				t.CdPA = cgpa
-				t.rxStack <- msg
-				t.deregister()
-			}
-			if e != nil && RxFailureNotify != nil {
-				RxFailureNotify(fmt.Errorf("invalid End data: %v", e), data)
-			}
-
-		case 0x65: // Continue
-			if msg, e := unmarshalTcContinue(v); e != nil {
-				if TraceMessage != nil {
-					TraceMessage(msg, Rx, e)
-				}
-				sendAbort(cgpa, msg.otid, TcBadlyFormattedTransactionPortion)
-
-				if RxFailureNotify != nil {
-					RxFailureNotify(fmt.Errorf("invalid Continue data: %v", e), data)
-				}
-			} else if t := GetTransaction(msg.dtid); t == nil {
-				if TraceMessage != nil {
-					TraceMessage(msg, Rx, fmt.Errorf("no active TC"))
-				}
-				sendAbort(cgpa, msg.otid, TcUnrecognizedTransactionID)
-			} else if len(t.rxStack) == cap(t.rxStack) {
-				if TraceMessage != nil {
-					TraceMessage(msg, Rx, fmt.Errorf("unexpected response"))
-				}
-				sendAbort(cgpa, msg.otid, TcResourceLimitation)
-				t.deregister()
-			} else {
-				if TraceMessage != nil {
-					TraceMessage(msg, Rx, e)
-				}
-				t.CdPA = cgpa
-				t.rxStack <- msg
-			}
-
-		case 0x67: // Abort
-			msg, e := unmarshalTcAbort(v)
-			var t *Transaction
-			if e != nil {
-			} else if t = GetTransaction(msg.dtid); t == nil {
-				e = fmt.Errorf("no active TC")
-			}
-			if TraceMessage != nil {
-				TraceMessage(msg, Rx, e)
-			}
-			if e == nil {
-				t.CdPA = cgpa
-				t.rxStack <- msg
-				t.deregister()
-			}
-			if e != nil && RxFailureNotify != nil {
-				RxFailureNotify(fmt.Errorf("invalid Abort data: %v", e), data)
-			}
+	case 0x67: // Abort
+		msg, e := unmarshalTcAbort(v)
+		var t *Transaction
+		if e != nil {
+		} else if t = GetTransaction(msg.dtid); t == nil {
+			e = fmt.Errorf("no active TC")
+		}
+		if TraceMessage != nil {
+			TraceMessage(msg, Rx, e)
+		}
+		if e == nil {
+			t.CdPA = cgpa
+			t.rxStack <- msg
+			t.deregister()
+		}
+		if e != nil && RxFailureNotify != nil {
+			RxFailureNotify(fmt.Errorf("invalid Abort data: %v", e), data)
 		}
 	}
 }
@@ -152,18 +153,14 @@ func sendAbort(cdpa xua.SCCPAddr, tid uint32, cause Cause) {
 }
 
 func send(cdpa xua.SCCPAddr, msg Message) (e error) {
-	var a *xua.ASP = nil
-	if SelectASP != nil {
-		a = SelectASP()
-	}
-	if a == nil {
+	if EndPoint == nil {
 		e = fmt.Errorf("failed to select destination")
 	}
 	if TraceMessage != nil {
 		TraceMessage(msg, Tx, e)
 	}
-	if a != nil {
-		a.Write(cdpa, msg.marshalTc())
+	if EndPoint != nil {
+		EndPoint.Write(PeerPointCode, cdpa, msg.marshalTc())
 	}
 	return
 }

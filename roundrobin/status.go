@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"net/http"
-
-	"github.com/fkgi/gsmap/xua"
 )
 
 const constatFmt = `{
@@ -26,8 +24,8 @@ func conStateHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf(constatFmt,
-		asp.State(), asp.LocalAddr(), xua.LocalAddr.GlobalTitle, asp.RemoteAddr())))
+	w.Write([]byte(fmt.Sprintf(constatFmt, "", "", "", "")))
+	//	asp.State(), asp.LocalAddr(), xua.LocalAddr.GlobalTitle, asp.RemoteAddr())))
 }
 
 var (

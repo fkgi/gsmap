@@ -65,7 +65,7 @@ type ASPAC struct {
 }
 
 func (m *ASPAC) handleMessage(c *ASP) {
-	if e := handleCtrlReq(c, m); e != nil {
+	if e := c.handleCtrlReq(m); e != nil {
 		m.result <- e
 	}
 }
@@ -73,7 +73,7 @@ func (m *ASPAC) handleMessage(c *ASP) {
 func (m *ASPAC) handleResult(msg message) {
 	switch res := msg.(type) {
 	case *ERR:
-		m.result <- fmt.Errorf("error with code %d", res.code)
+		m.result <- fmt.Errorf("error with code %s", res.code)
 	case *ASPACAck:
 		if res.mode != 0 && res.mode != m.mode {
 			m.result <- fmt.Errorf("traffic mode missmatch")
@@ -146,7 +146,7 @@ type ASPIA struct {
 }
 
 func (m *ASPIA) handleMessage(c *ASP) {
-	if e := handleCtrlReq(c, m); e != nil {
+	if e := c.handleCtrlReq(m); e != nil {
 		m.result <- e
 	}
 }
@@ -154,7 +154,7 @@ func (m *ASPIA) handleMessage(c *ASP) {
 func (m *ASPIA) handleResult(msg message) {
 	switch res := msg.(type) {
 	case *ERR:
-		m.result <- fmt.Errorf("error with code %d", res.code)
+		m.result <- fmt.Errorf("error with code %s", res.code)
 	case *ASPIAAck:
 		m.result <- nil
 	default:
@@ -202,7 +202,7 @@ type ASPACAck struct {
 	// info    string
 }
 
-func (m *ASPACAck) handleMessage(c *ASP) { handleCtrlAns(c, m) }
+func (m *ASPACAck) handleMessage(c *ASP) { c.handleCtrlAns(m) }
 
 func (m *ASPACAck) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
@@ -240,7 +240,7 @@ type ASPIAAck struct {
 	// info    string
 }
 
-func (m *ASPIAAck) handleMessage(c *ASP) { handleCtrlAns(c, m) }
+func (m *ASPIAAck) handleMessage(c *ASP) { c.handleCtrlAns(m) }
 
 func (m *ASPIAAck) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {

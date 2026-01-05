@@ -4,32 +4,38 @@ package xua
 
 import "unsafe"
 
-func sockOpenV4() (int, error) {
+func sockOpen() (int, error) {
 	return 0, nil
 }
 
-func sockOpenV6() (int, error) {
-	return 0, nil
-}
+func sockClose(int) {}
 
-func sockClose(int) error {
+/*
+func sockListen(int) error {
 	return nil
 }
+*/
 
 func sctpBindx(int, []byte) error {
 	return nil
 }
 
-func sctpConnectx(int, []byte) error {
-	return nil
-}
-
-func sctpSend(int, []byte, uint16, bool) (int, error) {
+func sctpConnectx(int, []byte) (int, error) {
 	return 0, nil
 }
 
-func sctpRecvmsg(int, []byte) (int, error) {
+/*
+func sctpAccept(int) (int, error) {
 	return 0, nil
+}
+*/
+
+func sctpSend(int, []byte, uint16) (int, error) {
+	return 0, nil
+}
+
+func sctpRecvmsg(int) ([]byte, error) {
+	return nil, nil
 }
 
 func sctpGetladdrs(int) (unsafe.Pointer, int, error) {

@@ -9,19 +9,14 @@ import (
 )
 
 func init() {
-	xua.AspUpNotify = func(la, pa *xua.SCTPAddr, e error) {
-		if e == nil {
-			log.Printf("[INFO] ASP up (%s->%s)", la, pa)
-		} else {
-			log.Printf("[ERROR] failed to up ASP (%s->%s): error=%s", la, pa, e)
-		}
+	xua.StateNotify = func(id byte, s xua.Status) {
+		log.Printf("[INFO] AS state change: id=0x%2x, state=%s", id, s)
 	}
-	xua.AsUpNotify = func(ctx uint32, e error) {
-		if e == nil {
-			log.Printf("[INFO] AS up (RC=%d)", ctx)
-		} else {
-			log.Printf("[ERROR] failed to up AS (RC=%d): error=%s", ctx, e)
-		}
+	xua.ErrorNotify = func(id byte, c xua.ErrCode) {
+		log.Printf("[INFO] AS error: id=0x%2x, state=%s", id, c)
+	}
+	xua.SctpNotify = func(id byte, s string) {
+		log.Printf("[INFO] SCTP: id=0x%2x, %s", id, s)
 	}
 
 	tcap.TraceMessage = func(m tcap.Message, d tcap.Direction, err error) {

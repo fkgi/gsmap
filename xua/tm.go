@@ -12,6 +12,27 @@ TM: RTransfer Messages
 Message class = 0x01
 */
 
+type Cause uint32
+
+const (
+	Success                               Cause = 0x0000
+	NoTranslationForAnAddressOfSuchNature Cause = 0x0100
+	NoTranslationForThisSpecificAddress   Cause = 0x0101
+	SubsystemCongestion                   Cause = 0x0102
+	SubsystemFailure                      Cause = 0x0103
+	UnequippedUser                        Cause = 0x0104
+	MtpFailure                            Cause = 0x0105
+	NetworkCongestion                     Cause = 0x0106
+	Unqualified                           Cause = 0x0107
+	ErrorInMessageTransport               Cause = 0x0108
+	ErrorInLocalProcessing                Cause = 0x0109
+	DestinationCannotPerformReassembly    Cause = 0x010a
+	SccpFailure                           Cause = 0x010b
+	HopCounterViolation                   Cause = 0x010c
+	SegmentationNotSupported              Cause = 0x010d
+	SegmentationFailure                   Cause = 0x010e
+)
+
 /*
 DATA is Payload Data message. (Message type = 0x01)
 
@@ -115,7 +136,7 @@ func (m *TxDATA) handleMessage(c *ASP) {
 	// Message Data
 	buf.Write(b)
 
-	i, e := sctpSend(c.sock, buf.Bytes(), uint16(m.sls)+1, true)
+	i, e := sctpSend(c.sock, buf.Bytes(), uint16(m.sls)+1)
 	if TxFailureNotify != nil {
 		if e != nil {
 			TxFailureNotify(e, buf.Bytes())
@@ -190,16 +211,13 @@ func (m *TxDATA) marshal() (uint8, uint8, []byte) {
 func (m *RxDATA) handleMessage(c *ASP) {
 	if m.cause == Success {
 		c.RxTransfer++
-		if PayloadHandler != nil {
-			PayloadHandler(m.cgpa, m.cdpa, m.data)
+		if c.handler != nil {
+			c.handler(m.cgpa, m.cdpa, m.data)
 		} else if m.returnOnError {
 			c.msgQ <- &TxDATA{
-				ctx:   m.ctx,
-				cause: SubsystemFailure,
-				userData: userData{
-					cgpa: LocalAddr,
-					cdpa: m.cgpa,
-					data: m.data}}
+				ctx:      m.ctx,
+				cause:    SubsystemFailure,
+				userData: userData{cgpa: c.gt, cdpa: m.cgpa, data: m.data}}
 		}
 	} else {
 		if TxFailureNotify != nil {

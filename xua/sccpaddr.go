@@ -3,7 +3,6 @@ package xua
 import (
 	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 
@@ -75,87 +74,6 @@ type SCCPAddr struct {
 	GlobalTitle     teldata.GlobalTitle     `json:"gt,omitempty"`
 	PointCode       uint32                  `json:"pc,omitempty"`
 	SubsystemNumber teldata.SubsystemNumber `json:"ssn,omitempty"`
-}
-
-func (a *SCCPAddr) marshalSUA() []byte {
-	buf := new(bytes.Buffer)
-
-	var ai uint16
-	if len(a.GlobalTitle.Digits) != 0 {
-		binary.Write(buf, binary.BigEndian, uint16(0x8001))
-
-		dig := a.GlobalTitle.Digits.Bytes()
-		for i := range dig {
-			if 0xf0&dig[i] == 0xf0 {
-				dig[i] = 0x0f & dig[i]
-			}
-			if 0x0f&dig[i] == 0x0f {
-				dig[i] = 0xf0 & dig[i]
-			}
-		}
-		l := len(dig)
-		if l%4 != 0 {
-			dig = append(dig, make([]byte, 4-l%4)...)
-			// l = len(dig)
-		}
-		l += 12
-		binary.Write(buf, binary.BigEndian, uint16(l))
-
-		var gti uint32 = 4 // TT, NPI and NAI
-		if a.GlobalTitle.TranslationType == 0 &&
-			a.GlobalTitle.NumberingPlan == teldata.UnknownNP {
-			gti = 1 // NAI only
-		} else if a.GlobalTitle.NatureOfAddress == teldata.UnknownNA &&
-			a.GlobalTitle.NumberingPlan == teldata.UnknownNP {
-			gti = 2 // TT only
-		} else if a.GlobalTitle.NatureOfAddress == teldata.UnknownNA {
-			gti = 3 // TT and NPI
-		}
-		binary.Write(buf, binary.BigEndian, gti)
-
-		buf.WriteByte(byte(a.GlobalTitle.Digits.Length()))
-		buf.WriteByte(a.GlobalTitle.TranslationType)
-
-		buf.WriteByte(byte(a.GlobalTitle.NumberingPlan))
-
-		switch a.GlobalTitle.NatureOfAddress {
-		case teldata.International:
-			buf.WriteByte(0x04)
-		case teldata.NationalSignificant:
-			buf.WriteByte(0x03)
-		case teldata.NetworkSpecific:
-			buf.WriteByte(0x02)
-		case teldata.Subscriber:
-			buf.WriteByte(0x01)
-		default:
-			buf.WriteByte(0x00)
-		}
-
-		buf.Write(dig)
-
-		ai |= 0x04
-	}
-	if a.PointCode != 0 {
-		writeUint32(buf, 0x8002, a.PointCode)
-		ai |= 0x02
-	}
-	if a.SubsystemNumber != 0 {
-		writeUint8(buf, 0x8003, a.SubsystemNumber.Uint())
-		ai |= 0x01
-	}
-
-	var ri uint16 = 1 // Rout on GT
-	if a.PointCode != 0 && a.SubsystemNumber != 0 {
-		ri = 2 // Route on PC+SSN
-	}
-
-	d := buf.Bytes()
-	buf = new(bytes.Buffer)
-	binary.Write(buf, binary.BigEndian, ri)
-	binary.Write(buf, binary.BigEndian, ai)
-	buf.Write(d)
-
-	return buf.Bytes()
 }
 
 func (a *SCCPAddr) marshalSCCP() []byte {
@@ -238,90 +156,6 @@ func (a *SCCPAddr) marshalSCCP() []byte {
 	b := buf.Bytes()
 	b[0] = ai
 	return b
-}
-
-func readSUAAddr(r io.ReadSeeker, l uint16) (a SCCPAddr, e error) {
-	if l%4 != 0 {
-		e = errors.New("invalid length of parameter")
-		return
-	}
-	var ri, ai uint16
-	if e = binary.Read(r, binary.BigEndian, &ri); e != nil {
-		return
-	}
-	if e = binary.Read(r, binary.BigEndian, &ai); e != nil {
-		return
-	}
-
-	buf := make([]byte, l-4)
-	if _, e = r.Read(buf); e != nil {
-		return
-	}
-	rr := bytes.NewReader(buf)
-	for rr.Len() > 4 {
-		var t, l uint16
-		if e = binary.Read(rr, binary.BigEndian, &t); e != nil {
-			break
-		}
-		if e = binary.Read(rr, binary.BigEndian, &l); e != nil {
-			break
-		}
-		l -= 4
-
-		switch t {
-		case 0x8001: // GT
-			if l < 8 {
-				e = errors.New("invalid length of parameter")
-				break
-			}
-			gthdr := make([]byte, 8)
-			if _, e = rr.Read(gthdr); e != nil {
-				break
-			}
-			// gti = gthdr[3]
-			a.GlobalTitle.TranslationType = gthdr[5]
-			a.GlobalTitle.NumberingPlan = teldata.NumberingPlan(gthdr[6])
-			switch gthdr[7] {
-			case 0x01:
-				a.GlobalTitle.NatureOfAddress = teldata.Subscriber
-			case 0x02:
-				a.GlobalTitle.NatureOfAddress = teldata.NetworkSpecific
-			case 0x03:
-				a.GlobalTitle.NatureOfAddress = teldata.NationalSignificant
-			case 0x04:
-				a.GlobalTitle.NatureOfAddress = teldata.International
-			default:
-				a.GlobalTitle.NatureOfAddress = teldata.UnknownNA
-			}
-
-			buf = make([]byte, l-8)
-			if _, e = rr.Read(buf); e != nil {
-				break
-			}
-			l = uint16(gthdr[4])
-			if l%2 != 0 {
-				l = (l + (l % 2)) / 2
-				buf[l-1] = buf[l-1] | 0xf0
-			} else {
-				l = l / 2
-			}
-			a.GlobalTitle.Digits = buf[:l]
-		case 0x8002: // PC
-			a.PointCode, e = readUint32(rr, l)
-		case 0x8003: // SSN
-			var tmp uint8
-			if tmp, e = readUint8(rr, l); e == nil {
-				a.SubsystemNumber = teldata.ParseSSN(tmp)
-			}
-		default:
-			_, e = r.Seek(int64(l), io.SeekCurrent)
-		}
-		if e != nil {
-			break
-		}
-	}
-
-	return
 }
 
 func readSCCPAddr(buf *bytes.Reader) (a SCCPAddr, e error) {

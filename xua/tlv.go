@@ -102,11 +102,13 @@ func readUint32(r io.ReadSeeker, l uint16) (v uint32, e error) {
 	return
 }
 
+/*
 func writeUint8(w io.Writer, t uint16, v uint8) {
 	binary.Write(w, binary.BigEndian, t)
 	binary.Write(w, binary.BigEndian, uint16(8))
 	binary.Write(w, binary.BigEndian, uint32(v))
 }
+*/
 
 func readUint8(r io.ReadSeeker, l uint16) (v uint8, e error) {
 	if l != 4 {
@@ -117,6 +119,7 @@ func readUint8(r io.ReadSeeker, l uint16) (v uint8, e error) {
 	return
 }
 
+/*
 func writeData(w io.Writer, d []byte) {
 	binary.Write(w, binary.BigEndian, uint16(0x010B))
 	binary.Write(w, binary.BigEndian, uint16(4+len(d)))
@@ -131,3 +134,4 @@ func readData(r io.ReadSeeker, l uint16) (d []byte, e error) {
 	_, e = r.Read(d)
 	return
 }
+*/

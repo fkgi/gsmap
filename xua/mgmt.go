@@ -1,6 +1,7 @@
 package xua
 
 import (
+	"fmt"
 	"io"
 )
 
@@ -43,19 +44,26 @@ Direction is SGP -> ASP.
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 */
 type ERR struct {
-	code uint32
+	code ErrCode
 	ctx  uint32
 	apc  []PointCode
 	na   *uint32
 	// info []byte
 }
 
-func (m *ERR) handleMessage(c *ASP) { handleCtrlAns(c, m) }
+func (m *ERR) handleMessage(c *ASP) {
+	if StateNotify != nil {
+		ErrorNotify(c.id, m.code)
+	}
+	c.handleCtrlAns(m)
+}
 
 func (m *ERR) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
 	case 0x000C: // Error Code
-		m.code, e = readUint32(r, l)
+		var c uint32
+		c, e = readUint32(r, l)
+		m.code = ErrCode(c)
 	case 0x0006: // Routing Context (Optional)
 		m.ctx, e = readUint32(r, l)
 	case 0x0012: // Affected Point Code (Optional)
@@ -74,28 +82,77 @@ func (m *ERR) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	return
 }
 
+type ErrCode uint32
+
 const (
-	InvalidVersion                 uint32 = 0x01
-	UnsupportedMessageClass        uint32 = 0x03
-	UnsupportedMessageType         uint32 = 0x04
-	UnsupportedTrafficHandlingMode uint32 = 0x05
-	UnexpectedMessage              uint32 = 0x06
-	ProtocolError                  uint32 = 0x07
-	InvalidStreamID                uint32 = 0x09
-	Refused                        uint32 = 0x0d
-	ASPIDRequired                  uint32 = 0x0e
-	InvalidASPID                   uint32 = 0x0f
-	InvalidParameterValue          uint32 = 0x11
-	ParameterFieldError            uint32 = 0x12
-	UnexpectedParameter            uint32 = 0x13
-	DestinationStatusUnknown       uint32 = 0x14
-	InvalidNetworkAppearance       uint32 = 0x15
-	MissingParameter               uint32 = 0x16
-	InvalidRoutingContext          uint32 = 0x19
-	NoConfiguredASforASP           uint32 = 0x1a
-	SubsystemStatusUnknown         uint32 = 0x1b
-	InvalidLoadsharingLabel        uint32 = 0x1c
+	InvalidVersion                 ErrCode = 0x01
+	UnsupportedMessageClass        ErrCode = 0x03
+	UnsupportedMessageType         ErrCode = 0x04
+	UnsupportedTrafficHandlingMode ErrCode = 0x05
+	UnexpectedMessage              ErrCode = 0x06
+	ProtocolError                  ErrCode = 0x07
+	InvalidStreamID                ErrCode = 0x09
+	Refused                        ErrCode = 0x0d
+	ASPIDRequired                  ErrCode = 0x0e
+	InvalidASPID                   ErrCode = 0x0f
+	InvalidParameterValue          ErrCode = 0x11
+	ParameterFieldError            ErrCode = 0x12
+	UnexpectedParameter            ErrCode = 0x13
+	DestinationStatusUnknown       ErrCode = 0x14
+	InvalidNetworkAppearance       ErrCode = 0x15
+	MissingParameter               ErrCode = 0x16
+	InvalidRoutingContext          ErrCode = 0x19
+	NoConfiguredASforASP           ErrCode = 0x1a
+	SubsystemStatusUnknown         ErrCode = 0x1b
+	InvalidLoadsharingLabel        ErrCode = 0x1c
 )
+
+func (c ErrCode) String() string {
+	switch c {
+	case InvalidVersion:
+		return "invalid_version(0x01)"
+	case UnsupportedMessageClass:
+		return "unsupported_message_class(0x03)"
+	case UnsupportedMessageType:
+		return "unsupported_message_type(0x04)"
+	case UnsupportedTrafficHandlingMode:
+		return "unsupported_traffic_handling_mode(0x05)"
+	case UnexpectedMessage:
+		return "unexpected_message(0x06)"
+	case ProtocolError:
+		return "protocol_error(0x07)"
+	case InvalidStreamID:
+		return "invalid_stream_ID(0x09)"
+	case Refused:
+		return "refused(0x0d)"
+	case ASPIDRequired:
+		return "ASP_ID_required(0x0e)"
+	case InvalidASPID:
+		return "invalid_ASP_ID(0x0f)"
+	case InvalidParameterValue:
+		return "invalid_parameter_value(0x11)"
+	case ParameterFieldError:
+		return "parameter_field_error(0x12)"
+	case UnexpectedParameter:
+		return "unexpected_parameter(0x13)"
+	case DestinationStatusUnknown:
+		return "destination_status_unknown(0x14)"
+	case InvalidNetworkAppearance:
+		return "invalid_network_appearance(0x15)"
+	case MissingParameter:
+		return "missing_parameter(0x16)"
+	case InvalidRoutingContext:
+		return "invalid_routing_context(0x19)"
+	case NoConfiguredASforASP:
+		return "no_configured_AS_for_ASP(0x1a)"
+	case SubsystemStatusUnknown:
+		return "subsystem_status_unknown(0x1b)"
+	case InvalidLoadsharingLabel:
+		return "invalid_loadsharing_label(0x1c)"
+	default:
+		return fmt.Sprintf("unknown_error(%x)", uint32(c))
+	}
+}
 
 /*
 NTFY is Notify message. (Message type = 0x01)
@@ -157,9 +214,17 @@ func (s Status) String() string {
 }
 
 func (m *NTFY) handleMessage(a *ASP) {
+	if a.state == m.status {
+		return
+	}
+
+	if StateNotify != nil {
+		StateNotify(a.id, m.status)
+	}
 	switch m.status {
 	case Down, Inactive, Active, Pending:
 		a.state = m.status
+		a.statNotif <- m.status
 	}
 }
 
