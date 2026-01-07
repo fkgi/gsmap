@@ -221,6 +221,7 @@ func (c *ASP) connectAndServe(ctx uint32, sharedQ chan userData) {
 		}
 
 		c.msgQ <- &NTFY{status: Down}
+		c.ctrlMsg = nil
 		close(c.msgQ)
 	}()
 

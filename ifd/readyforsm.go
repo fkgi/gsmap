@@ -61,7 +61,7 @@ type ReadyForSmArg struct {
 
 func (rsm ReadyForSmArg) String() string {
 	buf := new(strings.Builder)
-	fmt.Fprintf(buf, "%s (ID=%d)\n", rsm.Name(), rsm.InvokeID)
+	fmt.Fprintf(buf, "%s (ID=%d)", rsm.Name(), rsm.InvokeID)
 	fmt.Fprintf(buf, "\n%simsi:        %s", gsmap.LogPrefix, rsm.IMSI)
 	fmt.Fprintf(buf, "\n%salertReason: %s", gsmap.LogPrefix, rsm.Reason)
 	if rsm.ForGPRS {
