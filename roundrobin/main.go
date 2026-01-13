@@ -191,37 +191,26 @@ func readFromJSON(d []byte, defaultID int8) (cdpa xua.SCCPAddr, cgpa *xua.SCCPAd
 		return
 	}
 
-	type cmap struct {
-		val  json.RawMessage
-		cpnt gsmap.Component
-	}
-	cpnts := []cmap{}
-	cgpa = &xua.SCCPAddr{}
+	cpnt = []gsmap.Component{}
 	for k, v := range data {
 		switch k {
 		case "cdpa":
 			e = json.Unmarshal(v, &cdpa)
 		case "cgpa":
+			cgpa = &xua.SCCPAddr{}
 			e = json.Unmarshal(v, cgpa)
 		default:
 			if c, ok := gsmap.NameMap[k]; !ok {
 				e = errors.New("unknown component: " + k)
-			} else if _, ok := c.(gsmap.Invoke); !ok {
-				cpnts = append([]cmap{{v, c}}, cpnts...)
+			} else if c, e = c.NewFromJSON(v, defaultID); e != nil {
+			} else if _, ok := c.(gsmap.Invoke); ok {
+				cpnt = append(cpnt, c)
 			} else {
-				cpnts = append(cpnts, cmap{v, c})
+				cpnt = append([]gsmap.Component{c}, cpnt...)
 			}
+			defaultID++
 		}
 		if e != nil {
-			return
-		}
-	}
-	cpnt = []gsmap.Component{}
-	for _, rv := range cpnts {
-		if rv.cpnt, e = rv.cpnt.NewFromJSON(rv.val, defaultID); e == nil {
-			cpnt = append(cpnt, rv.cpnt)
-			defaultID++
-		} else {
 			return
 		}
 	}

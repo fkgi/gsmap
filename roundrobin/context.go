@@ -45,6 +45,15 @@ func getContext(n, v string) gsmap.AppContext {
 		case "v3":
 			return ifd.MwdMngt3
 		}
+	case "Reset":
+		switch v {
+		case "v1":
+			return ifd.Reset1
+		case "v2":
+			return ifd.Reset2
+		case "v3":
+			return ifd.Reset3
+		}
 	case "ShortMsgGateway":
 		switch v {
 		case "v1":
@@ -110,6 +119,12 @@ func getContextName(c gsmap.AppContext) (string, string) {
 		return "MwdMngt", "v2"
 	case ifd.MwdMngt3:
 		return "MwdMngt", "v3"
+	case ifd.Reset1:
+		return "Reset", "v1"
+	case ifd.Reset2:
+		return "Reset", "v2"
+	case ifd.Reset3:
+		return "Reset", "v3"
 	case ifc.ShortMsgGateway1:
 		return "ShortMsgGateway", "v1"
 	case ifc.ShortMsgGateway2:

@@ -10,14 +10,10 @@ import (
 	"github.com/fkgi/gsmap/xua"
 )
 
-var (
-	activeTC = map[uint32]*Transaction{}
-	tcLock   = make(chan struct{}, 1)
-	token    = struct{}{}
-)
+var activeTC = make(chan map[uint32]*Transaction, 1)
 
 func init() {
-	tcLock <- token
+	activeTC <- map[uint32]*Transaction{}
 }
 
 type Transaction struct {
@@ -52,18 +48,18 @@ func (t *Transaction) GetIdentity() uint32 {
 }
 
 func (t *Transaction) register() {
-	<-tcLock
-	for ok := true; ok; _, ok = activeTC[t.otid] {
+	tcs := <-activeTC
+	for ok := true; ok; _, ok = tcs[t.otid] {
 		t.otid = rand.Uint32()
 	}
-	activeTC[t.otid] = t
-	tcLock <- token
+	tcs[t.otid] = t
+	activeTC <- tcs
 }
 
 func (t *Transaction) deregister() {
-	<-tcLock
-	delete(activeTC, t.otid)
-	tcLock <- token
+	tcs := <-activeTC
+	delete(tcs, t.otid)
+	activeTC <- tcs
 }
 
 func (t *Transaction) verifyDalogue(d Dialogue) error {
@@ -85,9 +81,9 @@ func (t *Transaction) verifyDalogue(d Dialogue) error {
 }
 
 func GetTransaction(id uint32) (t *Transaction) {
-	<-tcLock
-	t = activeTC[id]
-	tcLock <- token
+	tcs := <-activeTC
+	t = tcs[id]
+	activeTC <- tcs
 	return
 }
 
@@ -189,44 +185,6 @@ func acceptTC(msg *TcBegin, cgpa xua.SCCPAddr) {
 	}
 	t.register()
 
-	/*
-		var reqCp []gsmap.Component
-		if len(msg.component) == 0 {
-			if send(cgpa, &TcContinue{
-				otid:     t.otid,
-				dtid:     t.dtid,
-				dialogue: dres}) != nil {
-				t.deregister()
-				return
-			}
-			dres = nil
-
-			timer := time.AfterFunc(Tw, func() {
-				t.rxStack <- &TcAbort{dtid: t.otid, pCause: TcTimeout}
-			})
-			res := <-t.rxStack
-			timer.Stop()
-
-			switch res.(type) {
-			case *TcContinue:
-				reqCp = res.Components()
-			case *TcEnd:
-				// ToDo: End with first component
-				NewInvoke(t, res.Components())
-				t.deregister()
-				return
-			case *TcAbort:
-				t.deregister()
-				return
-			default:
-				panic("unexpected response")
-			}
-		} else {
-			reqCp = msg.component
-		}
-
-		cres, following := NewInvoke(t, reqCp)
-	*/
 	if cres, enwctx, following := NewInvoke(t, msg.component); enwctx != 0 {
 		send(cgpa, &TcAbort{
 			dtid: t.dtid,
