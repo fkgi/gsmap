@@ -139,7 +139,10 @@ func main() {
 		dt.MaxIdleConnsPerHost = 1000
 		client = http.Client{
 			Transport: dt,
-			Timeout:   tcap.Tw}
+			Timeout:   tcap.Tw,
+			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+				return http.ErrUseLastResponse
+			}}
 		tcap.NewInvoke = handleIncomingDialog
 	}
 

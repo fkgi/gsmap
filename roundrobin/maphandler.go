@@ -64,6 +64,8 @@ func handleIncomingDialog(t *tcap.Transaction, cp []gsmap.Component) (
 		return nil, 0, nil
 	case http.StatusNotAcceptable:
 		return []gsmap.Component{}, 0, nil
+	case http.StatusNoContent:
+		return []gsmap.Component{tcap.EmptyResult{InvokeID: cp[0].GetInvokeID()}}, 0, nil
 	default:
 		log.Println("[ERROR]", "error from backend:", r.Status)
 		return internalErr, 0, nil
