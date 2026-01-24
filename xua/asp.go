@@ -229,15 +229,16 @@ func (c *ASP) connectAndServe(ctx uint32, sharedQ chan userData) {
 		return
 	}
 
+	// ASP active
+	r = make(chan error, 1)
+	c.msgQ <- &ASPAC{mode: Loadshare, ctx: ctx, result: r}
+	if <-r != nil {
+		return
+	}
+
 	for {
 		switch <-c.statNotif {
-		case Inactive:
-			// ASP active
-			r = make(chan error, 1)
-			c.msgQ <- &ASPAC{mode: Loadshare, ctx: ctx, result: r}
-			if <-r != nil {
-				return
-			}
+		// case Inactive:
 		case 0, Down:
 			return
 		}
