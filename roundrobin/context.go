@@ -74,18 +74,16 @@ func getContext(n, v string) gsmap.AppContext {
 		switch v {
 		case "v1":
 			return ife.ShortMsgRelay1
+		case "v2":
+			return ife.ShortMsgRelay2
 		}
 	case "ShortMsgMORelay":
 		switch v {
-		case "v2":
-			return ife.ShortMsgMORelay2
 		case "v3":
 			return ife.ShortMsgMORelay3
 		}
 	case "ShortMsgMTRelay":
 		switch v {
-		case "v2":
-			return ife.ShortMsgMTRelay2
 		case "v3":
 			return ife.ShortMsgMTRelay3
 		}
@@ -137,12 +135,10 @@ func getContextName(c gsmap.AppContext) (string, string) {
 		return "ShortMsgAlert", "v2"
 	case ife.ShortMsgRelay1:
 		return "ShortMsgRelay", "v1"
-	case ife.ShortMsgMORelay2:
-		return "ShortMsgMORelay", "v2"
+	case ife.ShortMsgRelay2:
+		return "ShortMsgRelay", "v2"
 	case ife.ShortMsgMORelay3:
 		return "ShortMsgMORelay", "v3"
-	case ife.ShortMsgMTRelay2:
-		return "ShortMsgMTRelay", "v2"
 	case ife.ShortMsgMTRelay3:
 		return "ShortMsgMTRelay", "v3"
 	}
