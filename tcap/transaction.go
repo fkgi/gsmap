@@ -185,13 +185,19 @@ func acceptTC(msg *TcBegin, cgpa xua.SCCPAddr) {
 	}
 	t.register()
 
-	if cres, enwctx, following := NewInvoke(t, msg.component); enwctx != 0 {
+	if cres, newctx, following := NewInvoke(t, msg.component); newctx != 0 {
+		/*if newctx&0x000000000000000f == 0x0000000000000001 {
+			send(cgpa, &TcAbort{
+				dtid:   t.dtid,
+				uCause: &ABRT{Source: SvcUser}})
+		} else {*/
 		send(cgpa, &TcAbort{
 			dtid: t.dtid,
 			uCause: &AARE{
-				Context:   enwctx,
+				Context:   newctx,
 				Result:    RejectPermanent,
 				ResultSrc: SrcUsrACNameNotSupported}})
+		// }
 		t.deregister()
 	} else if cres == nil {
 		t.Discard()
