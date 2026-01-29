@@ -162,9 +162,11 @@ func (se *SignalingEndpoint) Close() {
 	close(se.block)
 	asps := <-se.asps
 	for _, v := range asps {
-		r := make(chan error, 1)
-		v.msgQ <- &ASPDN{result: r}
-		<-r
+		if v.state == Active || v.state == Inactive {
+			r := make(chan error, 1)
+			v.msgQ <- &ASPDN{result: r}
+			<-r
+		}
 		sockClose(v.sock)
 	}
 	se.asps <- asps
