@@ -28,6 +28,8 @@ mt-ForwardSM OPERATION ::= {
 		sm-DeliveryFailure      |
 		absentSubscriberSM }
 	CODE local:44 }
+
+mt-ForwardSM is only for v3.
 */
 
 func init() {
