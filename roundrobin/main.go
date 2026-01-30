@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -118,23 +117,8 @@ func main() {
 		backend = ""
 	} else {
 		log.Println("[INFO]", "HTTP backend is", backend)
-		var dt *http.Transport
-		if t, ok := http.DefaultTransport.(*http.Transport); ok {
-			dt = t.Clone()
-		} else {
-			dt = &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
-				DialContext: (&net.Dialer{
-					Timeout:   30 * time.Second,
-					KeepAlive: 30 * time.Second,
-					DualStack: true,
-				}).DialContext,
-				ForceAttemptHTTP2:     false,
-				IdleConnTimeout:       90 * time.Second,
-				TLSHandshakeTimeout:   10 * time.Second,
-				ExpectContinueTimeout: 1 * time.Second,
-			}
-		}
+		t, _ := http.DefaultTransport.(*http.Transport)
+		dt := t.Clone()
 		dt.MaxIdleConns = 0
 		dt.MaxIdleConnsPerHost = 1000
 		client = http.Client{
