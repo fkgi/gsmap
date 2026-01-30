@@ -152,10 +152,11 @@ func main() {
 		}
 	*/
 
-	http.HandleFunc("/mapmsg/v1/", handleOutgoingDialog)
-	http.HandleFunc("/dialog/", handleContinueDialog)
-	http.HandleFunc("/mapstate/v1/connection", conStateHandler)
-	http.HandleFunc("/mapstate/v1/statistics", statsHandler)
+	http.HandleFunc("POST /mapmsg/v1/{ac}/{ver}", handleOutgoingDialog)
+	http.HandleFunc("POST /dialog/{id}", handleContinueDialog)
+	http.HandleFunc("DELETE /dialog/{id}", handleContinueDialog)
+	http.HandleFunc("GET /mapstate/v1/connection", conStateHandler)
+	http.HandleFunc("GET /mapstate/v1/statistics", statsHandler)
 	go func() {
 		log.Fatalln(http.ListenAndServe(*api, nil))
 	}()

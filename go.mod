@@ -1,3 +1,3 @@
 module github.com/fkgi/gsmap
 
-go 1.19
+go 1.23

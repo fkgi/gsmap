@@ -7,7 +7,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/fkgi/gsmap"
 	"github.com/fkgi/gsmap/tcap"
@@ -15,25 +14,11 @@ import (
 )
 
 func handleOutgoingDialog(w http.ResponseWriter, r *http.Request) {
-
-	var ctx gsmap.AppContext
-	if p := strings.Split(r.URL.Path, "/"); len(p) != 5 {
-		log.Println("[INFO]", "invalid path:", r.URL.Path)
-		httpErr("invalid path", r.URL.Path,
-			http.StatusNotFound, w)
-		return
-	} else if ctx = getContext(p[3], p[4]); ctx == 0 {
-		log.Println("[INFO]", "unsupported context:",
-			fmt.Sprintf("context=%s, version=%s", p[3], p[4]))
-		httpErr("unsupported context",
-			fmt.Sprintf("context=%s, version=%s", p[3], p[4]),
-			http.StatusNotFound, w)
-		return
-	}
-
-	if r.Method != http.MethodPost {
-		w.Header().Add("Allow", "POST")
-		w.WriteHeader(http.StatusMethodNotAllowed)
+	ctx := getContext(r.PathValue("ac"), r.PathValue("ver"))
+	if ctx == 0 {
+		s := fmt.Sprintf("context=%s, version=%s", r.PathValue("ac"), r.PathValue("ver"))
+		log.Println("[INFO]", "unsupported context:", s)
+		httpErr("unsupported context", s, http.StatusNotFound, w)
 		return
 	}
 
@@ -83,10 +68,7 @@ func handleOutgoingDialog(w http.ResponseWriter, r *http.Request) {
 
 func handleContinueDialog(w http.ResponseWriter, r *http.Request) {
 	var t *tcap.Transaction
-	if p := strings.Split(r.URL.Path, "/"); len(p) != 3 {
-		w.WriteHeader(http.StatusNotFound)
-		return
-	} else if b, e := hex.DecodeString(p[2]); e != nil {
+	if b, e := hex.DecodeString(r.PathValue("ver")); e != nil {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	} else if len(b) != 4 {
@@ -96,12 +78,6 @@ func handleContinueDialog(w http.ResponseWriter, r *http.Request) {
 		(uint32(b[0]) << 24) | (uint32(b[1]) << 16) |
 			(uint32(b[2]) << 8) | (uint32(b[3]))); t == nil {
 		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-
-	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
-		w.Header().Add("Allow", "POST, DELETE")
-		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
