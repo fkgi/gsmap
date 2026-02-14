@@ -68,7 +68,7 @@ func handleOutgoingDialog(w http.ResponseWriter, r *http.Request) {
 
 func handleContinueDialog(w http.ResponseWriter, r *http.Request) {
 	var t *tcap.Transaction
-	if b, e := hex.DecodeString(r.PathValue("ver")); e != nil {
+	if b, e := hex.DecodeString(r.PathValue("id")); e != nil {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	} else if len(b) != 4 {
