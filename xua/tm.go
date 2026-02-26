@@ -102,13 +102,6 @@ type DATA struct {
 	sls uint8
 
 	// SCCP data
-	returnOnError bool
-	protocolClass uint8
-	cause         Cause
-	//cgpa          SCCPAddr
-	//cdpa          SCCPAddr
-	//data          []byte
-
 	userData
 
 	// correlation *uint32
@@ -213,11 +206,15 @@ func (m *RxDATA) handleMessage(c *ASP) {
 		c.RxTransfer++
 		if c.handler != nil {
 			c.handler(m.cgpa, m.cdpa, m.data)
-		} else if m.returnOnError {
-			c.msgQ <- &TxDATA{
-				ctx:      m.ctx,
-				cause:    SubsystemFailure,
-				userData: userData{cgpa: c.gt, cdpa: m.cgpa, data: m.data}}
+			/*
+				} else if m.returnOnError {
+					c.msgQ <- &TxDATA{
+						ctx: m.ctx,
+						userData: userData{
+							cause: SubsystemFailure,
+							cgpa:  m.cdpa, cdpa: m.cgpa,
+							data: m.data}}
+			*/
 		}
 	} else {
 		if TxFailureNotify != nil {

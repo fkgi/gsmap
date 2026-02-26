@@ -106,8 +106,6 @@ type ASP struct {
 	id   byte
 	sock int
 
-	gt SCCPAddr
-
 	msgQ    chan message
 	ctrlMsg txMessage
 

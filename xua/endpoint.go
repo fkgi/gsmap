@@ -12,9 +12,12 @@ const (
 )
 
 type userData struct {
-	cgpa SCCPAddr
-	cdpa SCCPAddr
-	data []byte
+	returnOnError bool
+	protocolClass uint8
+	cause         Cause
+	cgpa          SCCPAddr
+	cdpa          SCCPAddr
+	data          []byte
 }
 
 var id = make(chan byte, 1)
@@ -71,20 +74,24 @@ func NewSignalingEndpoint(a *SCTPAddr) (se *SignalingEndpoint, e error) {
 			}
 			if req, ok := <-se.sharedQ; !ok {
 				break
-			} else if se.PayloadHandler == nil {
-				se.selectASP().msgQ <- &TxDATA{
-					ctx:      se.Context,
-					cause:    SubsystemFailure,
-					userData: userData{cgpa: se.SCCPAddr, cdpa: req.cgpa, data: req.data}}
-			} else {
+			} else if se.PayloadHandler != nil {
 				se.PayloadHandler(req.cgpa, req.cdpa, req.data)
+				/*
+					} else if req.returnOnError {
+						se.selectASP().msgQ <- &TxDATA{
+							ctx: se.Context,
+							userData: userData{
+								cause: SubsystemFailure,
+								cgpa:  se.SCCPAddr, cdpa: req.cgpa,
+								data: req.data}}
+				*/
 			}
 			c = 0
 		}
 		activeWorkers <- (<-activeWorkers - 1)
 	}
 
-	for i := 0; i < minWorkers; i++ {
+	for range minWorkers {
 		go func() {
 			for req, ok := <-se.sharedQ; ok; req, ok = <-se.sharedQ {
 				a := <-activeWorkers
@@ -92,13 +99,17 @@ func NewSignalingEndpoint(a *SCTPAddr) (se *SignalingEndpoint, e error) {
 				if len(se.sharedQ) > minWorkers && a < maxWorkers {
 					activeWorkers <- (<-activeWorkers + 1)
 					go worker()
-				} else if se.PayloadHandler == nil {
-					se.selectASP().msgQ <- &TxDATA{
-						ctx:      se.Context,
-						cause:    SubsystemFailure,
-						userData: userData{cgpa: se.SCCPAddr, cdpa: req.cgpa, data: req.data}}
-				} else {
+				} else if se.PayloadHandler != nil {
 					se.PayloadHandler(req.cgpa, req.cdpa, req.data)
+					/*
+						} else if req.returnOnError {
+							se.selectASP().msgQ <- &TxDATA{
+								ctx: se.Context,
+								userData: userData{
+									cause: SubsystemFailure,
+									cgpa:  se.SCCPAddr, cdpa: req.cgpa,
+									data: req.data}}
+					*/
 				}
 			}
 		}()
@@ -131,7 +142,7 @@ func (se *SignalingEndpoint) ConnectTo(a *SCTPAddr) error {
 			}
 			if s, e := sctpConnectx(se.sock, a.rawBytes()); e == nil {
 				asps := <-se.asps
-				asps[s] = &ASP{id: i, sock: s, gt: se.SCCPAddr}
+				asps[s] = &ASP{id: i, sock: s}
 				se.asps <- asps
 
 				asps[s].connectAndServe(se.Context, se.sharedQ)
@@ -207,15 +218,15 @@ func (se *SignalingEndpoint) Write(dpc uint32, cdpa SCCPAddr, data []byte) {
 	c.sequence <- seq + 1
 
 	c.msgQ <- &TxDATA{
-		na:            se.NetAppearance,
-		ctx:           se.Context,
-		opc:           se.PointCode,
-		dpc:           dpc,
-		ni:            se.NetIndicator,
-		sls:           uint8(seq & SLSMask),
-		returnOnError: se.ReturnOnError,
+		na:  se.NetAppearance,
+		ctx: se.Context,
+		opc: se.PointCode,
+		dpc: dpc,
+		ni:  se.NetIndicator,
+		sls: uint8(seq & SLSMask),
 		userData: userData{
-			cgpa: se.SCCPAddr,
-			cdpa: cdpa,
-			data: data}}
+			returnOnError: se.ReturnOnError,
+			cgpa:          se.SCCPAddr,
+			cdpa:          cdpa,
+			data:          data}}
 }
