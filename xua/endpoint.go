@@ -55,14 +55,17 @@ func NewSignalingEndpoint(a *SCTPAddr) (se *SignalingEndpoint, e error) {
 	} else if se.sock, e = sockOpen(); e != nil {
 	} else if e = sctpBindx(se.sock, a.rawBytes()); e != nil {
 		sockClose(se.sock)
-	} else {
-		se.asps = make(chan map[int]*ASP, 1)
-		se.asps <- map[int]*ASP{}
-		se.block = make(chan any)
-		se.sharedQ = make(chan userData, maxWorkers)
+	}
+	if e != nil {
+		return
 	}
 
-	var activeWorkers = make(chan int, 1)
+	se.asps = make(chan map[int]*ASP, 1)
+	se.asps <- map[int]*ASP{}
+	se.block = make(chan any)
+	se.sharedQ = make(chan userData, maxWorkers)
+
+	activeWorkers := make(chan int, 1)
 	activeWorkers <- 0
 
 	worker := func() {
@@ -193,6 +196,7 @@ func (se *SignalingEndpoint) Close() {
 		}
 	}
 
+	close(se.sharedQ)
 	sockClose(se.sock)
 }
 

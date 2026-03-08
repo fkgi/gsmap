@@ -17,49 +17,46 @@ type userData struct {
 	data []byte
 }
 
-var id = make(chan byte, 1)
-
-func init() {
-	id <- byte(time.Now().UnixMicro())
-}
-func nextID() byte {
-	i := <-id + 1
-	id <- i
-	return i
-}
-
 type SignalingEndpoint struct {
-	sock    int
-	asps    chan map[int]*ASP
-	block   chan any
-	sharedQ chan userData
+	sock     int
+	asps     chan map[int]*ASP
+	block    chan any
+	sharedQ  chan userData
+	sequence chan uint8
 
 	PayloadHandler func(SCCPAddr, SCCPAddr, []byte)
-	NetIndicator   uint8
-	NetAppearance  *uint32
-	Context        uint32
-	PointCode      uint32
-	SCCPAddr
+
+	NetIndicator  uint8
+	NetAppearance *uint32
+	PointCode     uint32
+	SCCPAddr      SCCPAddr
 	ReturnOnError bool
 }
 
 func NewSignalingEndpoint(a *SCTPAddr) (se *SignalingEndpoint, e error) {
-	se = &SignalingEndpoint{}
+	var sock int
 	if a == nil || len(a.IP) == 0 {
 		e = fmt.Errorf("nil address")
 	} else if a.IP[0].To4() == nil {
 		e = fmt.Errorf("invalid address")
-	} else if se.sock, e = sockOpen(); e != nil {
-	} else if e = sctpBindx(se.sock, a.rawBytes()); e != nil {
-		sockClose(se.sock)
-	} else {
-		se.asps = make(chan map[int]*ASP, 1)
-		se.asps <- map[int]*ASP{}
-		se.block = make(chan any)
-		se.sharedQ = make(chan userData, maxWorkers)
+	} else if sock, e = sockOpen(); e != nil {
+	} else if e = sctpBindx(sock, a.rawBytes()); e != nil {
+		sockClose(sock)
+	}
+	if e != nil {
+		return
 	}
 
-	var activeWorkers = make(chan int, 1)
+	se = &SignalingEndpoint{
+		sock:     sock,
+		asps:     make(chan map[int]*ASP, 1),
+		block:    make(chan any),
+		sharedQ:  make(chan userData, maxWorkers),
+		sequence: make(chan uint8, 1)}
+	se.asps <- map[int]*ASP{}
+	se.sequence <- 0
+
+	activeWorkers := make(chan int, 1)
 	activeWorkers <- 0
 
 	worker := func() {
@@ -67,39 +64,36 @@ func NewSignalingEndpoint(a *SCTPAddr) (se *SignalingEndpoint, e error) {
 			if len(se.sharedQ) < minWorkers {
 				time.Sleep(time.Millisecond * 10)
 				c++
-				continue
-			}
-			if req, ok := <-se.sharedQ; !ok {
+			} else if req, ok := <-se.sharedQ; !ok {
 				break
-			} else if se.PayloadHandler == nil {
-				se.selectASP().msgQ <- &TxDATA{
-					ctx:      se.Context,
-					cause:    SubsystemFailure,
-					userData: userData{cgpa: se.SCCPAddr, cdpa: req.cgpa, data: req.data}}
 			} else {
 				se.PayloadHandler(req.cgpa, req.cdpa, req.data)
+				c = 0
 			}
-			c = 0
 		}
 		activeWorkers <- (<-activeWorkers - 1)
 	}
 
-	for i := 0; i < minWorkers; i++ {
+	for range minWorkers {
 		go func() {
 			for req, ok := <-se.sharedQ; ok; req, ok = <-se.sharedQ {
-				a := <-activeWorkers
-				activeWorkers <- a
-				if len(se.sharedQ) > minWorkers && a < maxWorkers {
-					activeWorkers <- (<-activeWorkers + 1)
-					go worker()
-				} else if se.PayloadHandler == nil {
-					se.selectASP().msgQ <- &TxDATA{
-						ctx:      se.Context,
+				if se.PayloadHandler == nil {
+					c := se.selectASP()
+					c.msgQ <- &DATA{
+						ctx:      c.ctx,
 						cause:    SubsystemFailure,
-						userData: userData{cgpa: se.SCCPAddr, cdpa: req.cgpa, data: req.data}}
-				} else {
-					se.PayloadHandler(req.cgpa, req.cdpa, req.data)
+						userData: userData{cgpa: se.SCCPAddr, cdpa: req.cgpa, data: req.data},
+						result:   make(chan error, 1)}
+					continue
 				}
+
+				a := <-activeWorkers
+				if len(se.sharedQ) > minWorkers && a < maxWorkers {
+					a++
+					go worker()
+				}
+				activeWorkers <- a
+				se.PayloadHandler(req.cgpa, req.cdpa, req.data)
 			}
 		}()
 	}
@@ -115,7 +109,7 @@ func (se *SignalingEndpoint) Listen() (e error) {
 }
 */
 
-func (se *SignalingEndpoint) ConnectTo(a *SCTPAddr) error {
+func (se *SignalingEndpoint) ConnectTo(a *SCTPAddr, ctx uint32, apc uint32) error {
 	if a == nil || len(a.IP) == 0 {
 		return fmt.Errorf("nil address")
 	} else if a.IP[0].To4() == nil {
@@ -123,35 +117,25 @@ func (se *SignalingEndpoint) ConnectTo(a *SCTPAddr) error {
 	}
 
 	go func() {
-	svc:
 		for {
-			i := nextID()
-			if SctpNotify != nil {
-				SctpNotify(i, fmt.Sprintf("connecting to %s", a.String()))
-			}
 			if s, e := sctpConnectx(se.sock, a.rawBytes()); e == nil {
 				asps := <-se.asps
-				asps[s] = &ASP{id: i, sock: s, gt: se.SCCPAddr}
+				asps[s] = &ASP{sock: s, apc: apc, ctx: ctx, handler: se.PayloadHandler}
 				se.asps <- asps
 
-				asps[s].connectAndServe(se.Context, se.sharedQ)
+				asps[s].connectAndServe(se.sharedQ)
 
 				asps = <-se.asps
 				delete(asps, s)
 				se.asps <- asps
-				sockClose(s)
-
-				if SctpNotify != nil {
-					SctpNotify(i, "closed")
-				}
 			} else if SctpNotify != nil {
-				SctpNotify(i, "failed to connect: "+e.Error())
+				SctpNotify(s, "failed to connect: "+e.Error())
 			}
 
 			select {
 			case <-se.block:
-				break svc
-			case <-time.After(time.Second * 30):
+				return
+			case <-time.After(tr):
 			}
 		}
 	}()
@@ -160,14 +144,12 @@ func (se *SignalingEndpoint) ConnectTo(a *SCTPAddr) error {
 
 func (se *SignalingEndpoint) Close() {
 	close(se.block)
+
 	asps := <-se.asps
 	for _, v := range asps {
-		if v.state == Active || v.state == Inactive {
-			r := make(chan error, 1)
-			v.msgQ <- &ASPDN{result: r}
-			<-r
+		if v.stat == Active || v.stat == Inactive {
+			v.msgQ <- &ASPDN{sock: v.sock}
 		}
-		sockClose(v.sock)
 	}
 	se.asps <- asps
 
@@ -175,47 +157,50 @@ func (se *SignalingEndpoint) Close() {
 		asps := <-se.asps
 		l := len(asps)
 		se.asps <- asps
-		if l != 0 {
-			time.Sleep(time.Millisecond * 100)
-		} else {
+
+		if l == 0 {
 			break
 		}
+		time.Sleep(time.Millisecond * 100)
 	}
 
 	sockClose(se.sock)
+	close(se.sharedQ)
 }
 
 func (se *SignalingEndpoint) selectASP() (c *ASP) {
 	asps := <-se.asps
 	list := make([]*ASP, 0, len(asps))
 	for _, c = range asps {
-		list = append(list, c)
-	}
-	se.asps <- asps
-	for {
-		c = list[rand.Intn(len(list))]
-		if c.state == Active {
-			break
+		if c.stat == Active {
+			list = append(list, c)
 		}
 	}
+	se.asps <- asps
+	c = list[rand.Intn(len(list))]
 	return
 }
 
 func (se *SignalingEndpoint) Write(dpc uint32, cdpa SCCPAddr, data []byte) {
 	c := se.selectASP()
-	seq := <-c.sequence
-	c.sequence <- seq + 1
+	seq := <-se.sequence
+	se.sequence <- seq + 1
 
-	c.msgQ <- &TxDATA{
+	r := make(chan error)
+	c.msgQ <- &DATA{
 		na:            se.NetAppearance,
-		ctx:           se.Context,
+		ctx:           c.ctx,
 		opc:           se.PointCode,
 		dpc:           dpc,
 		ni:            se.NetIndicator,
-		sls:           uint8(seq & SLSMask),
+		sls:           seq & SLSMask,
 		returnOnError: se.ReturnOnError,
 		userData: userData{
 			cgpa: se.SCCPAddr,
 			cdpa: cdpa,
-			data: data}}
+			data: data},
+		result: r}
+	if e := <-r; e != nil && TxFailureNotify != nil {
+		TxFailureNotify(e, data)
+	}
 }

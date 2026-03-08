@@ -1,9 +1,9 @@
 package ipsp
 
 var (
-	ErrorNotify func(id byte, c ErrCode)
-	StateNotify func(id byte, s Status)
-	SctpNotify  func(id byte, s string)
+	ErrorNotify func(id int, c ErrCode)
+	StateNotify func(id int, s Status)
+	SctpNotify  func(id int, s string)
 
 	DunaNotify func([]PointCode)
 	DavaNotify func([]PointCode)

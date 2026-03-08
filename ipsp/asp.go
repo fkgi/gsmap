@@ -12,14 +12,14 @@ import (
 )
 
 var (
-	// tr    = time.Second * 2 // Pending Recovery timer
-	tack = time.Second * 2 // Wait Response timer
+	tr   = time.Second * 30 // Pending Recovery timer
+	tack = time.Second * 2  // Wait Response timer
 
-	SLSMask uint32 = 0x0000000f
+	SLSMask uint8 = 0x0f
 )
 
 /*
-Message of xUA
+message of xUA
 
 	 0                   1                   2                   3
 	 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
@@ -33,26 +33,18 @@ Message of xUA
 type message interface {
 	// handleMsg handles this message
 	handleMessage(*ASP)
-}
-
-type txMessage interface {
-	message
 
 	// handleResult handles result of this message
 	handleResult(message)
 
 	// marshal returns Message Class, Message Type and binary Message Data
 	marshal() (uint8, uint8, []byte)
-}
-
-type rxMessage interface {
-	message
 
 	// unmarshal decodes specified Tag/length TLV value from reader
 	unmarshal(uint16, uint16, io.ReadSeeker) error
 }
 
-func getRxMessage(c, t byte) rxMessage {
+func getMessage(c, t byte) message {
 	switch c {
 	case 0x00:
 		switch t {
@@ -64,7 +56,7 @@ func getRxMessage(c, t byte) rxMessage {
 	case 0x01:
 		switch t {
 		case 0x01:
-			return new(RxDATA)
+			return new(DATA)
 		}
 	case 0x02:
 		switch t {
@@ -110,28 +102,21 @@ func getRxMessage(c, t byte) rxMessage {
 }
 
 type ASP struct {
-	id   byte
 	sock int
-
-	gt SCCPAddr
+	apc  uint32
+	ctx  uint32
 
 	msgQ    chan message
-	ctrlMsg txMessage
+	ctrlMsg message
 
 	handler func(SCCPAddr, SCCPAddr, []byte)
 
-	state     Status
-	statNotif chan Status
-	sequence  chan uint32
+	stat Status
 
 	TxTransfer uint64
 	RxTransfer uint64
 	TxResponse uint64
 	RxResponse uint64
-}
-
-func (c ASP) State() Status {
-	return c.state
 }
 
 func (c *ASP) LocalAddr() net.Addr {
@@ -150,36 +135,32 @@ func (c *ASP) RemoteAddr() net.Addr {
 	return resolveFromRawAddr(ptr, n)
 }
 
-/*
-func NewASP(gt SCCPAddr) *ASP {
-	c := &ASP{
-		//sock:     s,
-		gt: gt}
-	return c
-}
-*/
-
-func (c *ASP) connectAndServe(ctx uint32, sharedQ chan userData) {
+func (c *ASP) connectAndServe(sharedQ chan userData) {
 	c.msgQ = make(chan message, 1024)
 	c.ctrlMsg = nil
-	c.state = 0
-	c.statNotif = make(chan Status, 256)
-	c.sequence = make(chan uint32, 1)
-	c.sequence <- 0
+	c.stat = Down
 
-	go func() { // event procedure
-		for m, ok := <-c.msgQ; ok; m, ok = <-c.msgQ {
-			m.handleMessage(c)
+	go func() {
+		// ASP up
+		r := make(chan error, 1)
+		c.msgQ <- &ASPUP{result: r}
+		if <-r != nil {
+			sockClose(c.sock)
+			return
 		}
+		c.stat = Inactive
+
+		// ASP active
+		r = make(chan error, 1)
+		c.msgQ <- &ASPAC{mode: Loadshare, ctx: c.ctx, result: r}
+		if <-r == nil {
+			c.stat = Active
+			return
+		}
+
+		// ASP down
+		c.msgQ <- &ASPDN{sock: c.sock}
 	}()
-
-	// connect procedure
-	c.msgQ <- &NTFY{status: Down}
-	<-c.statNotif
-
-	// ASP up
-	r := make(chan error, 1)
-	c.msgQ <- &ASPUP{result: r}
 
 	go func() { // rx data procedure
 		for {
@@ -195,7 +176,7 @@ func (c *ASP) connectAndServe(ctx uint32, sharedQ chan userData) {
 				continue
 			}
 
-			m := getRxMessage(data[2], data[3])
+			m := getMessage(data[2], data[3])
 			if m == nil {
 				if RxFailureNotify != nil {
 					RxFailureNotify(fmt.Errorf("unknown message: %x-%x", data[2], data[3]), data)
@@ -219,7 +200,7 @@ func (c *ASP) connectAndServe(ctx uint32, sharedQ chan userData) {
 				}
 			}
 
-			if msg, ok := m.(*RxDATA); ok && msg.cause == Success && msg.protocolClass == 0 {
+			if msg, ok := m.(*DATA); ok && msg.cause == 0 && msg.protocolClass == 0 {
 				c.RxTransfer++
 				sharedQ <- msg.userData
 			} else {
@@ -227,63 +208,29 @@ func (c *ASP) connectAndServe(ctx uint32, sharedQ chan userData) {
 			}
 		}
 
-		c.msgQ <- &NTFY{status: Down}
 		c.ctrlMsg = nil
+		sockClose(c.sock)
 		close(c.msgQ)
 	}()
 
-	if <-r != nil {
-		return
+	// event procedure
+	for m, ok := <-c.msgQ; ok; m, ok = <-c.msgQ {
+		m.handleMessage(c)
 	}
-
-	// ASP active
-	r = make(chan error, 1)
-	c.msgQ <- &ASPAC{mode: Loadshare, ctx: ctx, result: r}
-	if <-r != nil {
-		return
-	}
-
-	for {
-		switch <-c.statNotif {
-		// case Inactive:
-		case 0, Down:
-			return
-		}
-	}
+	c.stat = Down
 }
 
-func (c *ASP) handleCtrlReq(m txMessage) (e error) {
+func (c *ASP) handleCtrlReq(m message) (e error) {
 	if c.ctrlMsg != nil {
 		e = errors.New("any other request is waiting answer")
-		return
+	} else if e = c.send(m); e == nil {
+		c.ctrlMsg = m
+		time.AfterFunc(tack, func() {
+			if c.ctrlMsg == m {
+				c.msgQ <- &ERR{code: ProtocolError}
+			}
+		})
 	}
-
-	cls, typ, b := m.marshal()
-	buf := new(bytes.Buffer)
-
-	// version
-	buf.WriteByte(1)
-	// reserved
-	buf.WriteByte(0)
-	// Message Class
-	buf.WriteByte(cls)
-	// Message Type
-	buf.WriteByte(typ)
-	// Message Length
-	binary.Write(buf, binary.BigEndian, uint32(len(b)+8))
-	// Message Data
-	buf.Write(b)
-
-	if _, e = sctpSend(c.sock, buf.Bytes(), 0); e != nil {
-		return
-	}
-
-	c.ctrlMsg = m
-	time.AfterFunc(tack, func() {
-		if c.ctrlMsg == m {
-			c.msgQ <- &ERR{code: ProtocolError}
-		}
-	})
 	return
 }
 
@@ -294,7 +241,7 @@ func (c *ASP) handleCtrlAns(m message) {
 	}
 }
 
-func (c *ASP) sendAnswer(m txMessage) error {
+func (c *ASP) send(m message) error {
 	cls, typ, b := m.marshal()
 	buf := new(bytes.Buffer)
 

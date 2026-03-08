@@ -54,7 +54,7 @@ type ERR struct {
 
 func (m *ERR) handleMessage(c *ASP) {
 	if StateNotify != nil {
-		ErrorNotify(c.id, m.code)
+		ErrorNotify(c.sock, m.code)
 	}
 	c.handleCtrlAns(m)
 }
@@ -92,7 +92,7 @@ func (m *ERR) marshal() (uint8, uint8, []byte) {
 
 func (m *ERR) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
-	case 0x000C: // Error Code
+	case 0x000c: // Error Code
 		var c uint32
 		c, e = readUint32(r, l)
 		m.code = ErrCode(c)
@@ -100,7 +100,7 @@ func (m *ERR) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 		m.ctx, e = readUint32(r, l)
 	case 0x0012: // Affected Point Code (Optional)
 		m.apc, e = readAPC(r, l)
-	case 0x010D: // Network Appearance (Optional)
+	case 0x010d: // Network Appearance (Optional)
 		*m.na, e = readUint32(r, l)
 	// case 0x0007:	// Diagnostic Info (Optional)
 	//	m.info = make([]byte, l)
@@ -249,19 +249,10 @@ func (s Status) String() string {
 
 func (m *NTFY) handleMessage(a *ASP) {
 	if m.result != nil {
-		m.result <- a.sendAnswer(m)
+		m.result <- a.send(m)
 	} else {
-		if a.state == m.status {
-			return
-		}
-
 		if StateNotify != nil {
-			StateNotify(a.id, m.status)
-		}
-		switch m.status {
-		case Down, Inactive, Active, Pending:
-			a.state = m.status
-			a.statNotif <- m.status
+			StateNotify(a.sock, m.status)
 		}
 	}
 }
@@ -270,8 +261,9 @@ func (m *NTFY) handleResult(msg message) {}
 
 func (m *NTFY) marshal() (uint8, uint8, []byte) {
 	buf := new(bytes.Buffer)
+
 	// Status
-	writeUint32(buf, 0x000D, uint32(m.status))
+	writeUint32(buf, 0x000d, uint32(m.status))
 
 	// ASP Identifier (Optional)
 	// if m.id != nil {
@@ -293,7 +285,7 @@ func (m *NTFY) marshal() (uint8, uint8, []byte) {
 func (m *NTFY) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	//	b []byte) (e error) {
 	switch t {
-	case 0x000D: // Status
+	case 0x000d: // Status
 		var tmp uint32
 		tmp, e = readUint32(r, l)
 		m.status = Status(tmp)

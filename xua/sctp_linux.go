@@ -55,19 +55,6 @@ func sctpConnectx(fd int, addr []byte) (int, error) {
 		return 0, e
 	}
 
-	/*
-		on := 1
-		if _, _, e := syscall.Syscall6(syscall.SYS_SETSOCKOPT,
-			uintptr(fd),
-			syscall.IPPROTO_SCTP,
-			0x20, // SCTP_RECVRCVINFO
-			uintptr(unsafe.Pointer(&on)),
-			unsafe.Sizeof(on),
-			0); e != 0 {
-			return 0, e
-		}
-	*/
-
 	t, _, e := syscall.Syscall6(syscall.SYS_SETSOCKOPT,
 		uintptr(fd),
 		syscall.IPPROTO_SCTP,
@@ -104,13 +91,13 @@ func sctpConnectx(fd int, addr []byte) (int, error) {
 */
 
 func sctpSend(fd int, b []byte, sid uint16) (int, error) {
-	buf := new(bytes.Buffer)
 	hdr := syscall.Cmsghdr{
 		Level: syscall.IPPROTO_SCTP,
 		Type:  2, //SCTP_SNDINFO
 	}
 	hdr.SetLen(syscall.CmsgSpace(16))
 
+	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.LittleEndian, hdr)
 	binary.Write(buf, binary.LittleEndian, sid)            // stream ID(2 byte)
 	binary.Write(buf, binary.LittleEndian, uint16(0x0001)) // flag(2 byte) = SCTP_UNORDERED
@@ -133,25 +120,6 @@ func sctpRecvmsg(fd int) (data []byte, e error) {
 		return
 	}
 	data = data[:n]
-
-	/*
-		if on > 0 {
-			var msgs []syscall.SocketControlMessage
-			if msgs, e = syscall.ParseSocketControlMessage(info); e != nil {
-				return
-			}
-			for _, m := range msgs {
-				if m.Header.Level == syscall.IPPROTO_SCTP &&
-					m.Header.Type == 0x03 { // SCTP_RECVINFO
-					buf := bytes.NewBuffer(m.Data)
-					buf.Read(make([]byte, 2))                   // ???
-					binary.Read(buf, binary.LittleEndian, &sid) // stream ID(2 byte)
-					buf.Read(make([]byte, 2+2+4+4+4+4)) // ssn, flags, ppid, tsn, cumtsn, context
-					binary.Read(buf, binary.LittleEndian, &aid) // assoc ID(4 byte)
-				}
-			}
-		}
-	*/
 	return
 }
 
@@ -162,14 +130,13 @@ func sctpGetladdrs(fd int) (unsafe.Pointer, int, error) {
 		addrs [4096]byte
 	}{}
 	l := unsafe.Sizeof(addr)
-	_, _, e := syscall.Syscall6(syscall.SYS_GETSOCKOPT,
+	if _, _, e := syscall.Syscall6(syscall.SYS_GETSOCKOPT,
 		uintptr(fd),
 		syscall.IPPROTO_SCTP,
 		109, // SCTP_GET_LOCAL_ADDRS
 		uintptr(unsafe.Pointer(&addr)),
 		uintptr(unsafe.Pointer(&l)),
-		0)
-	if e != 0 {
+		0); e != 0 {
 		return nil, 0, e
 	}
 	return unsafe.Pointer(&addr.addrs), int(addr.num), nil
@@ -182,14 +149,13 @@ func sctpGetpaddrs(fd int) (unsafe.Pointer, int, error) {
 		addrs [4096]byte
 	}{}
 	l := unsafe.Sizeof(addr)
-	_, _, e := syscall.Syscall6(syscall.SYS_GETSOCKOPT,
+	if _, _, e := syscall.Syscall6(syscall.SYS_GETSOCKOPT,
 		uintptr(fd),
 		syscall.IPPROTO_SCTP,
 		108, // SCTP_GET_PEER_ADDRS
 		uintptr(unsafe.Pointer(&addr)),
 		uintptr(unsafe.Pointer(&l)),
-		0)
-	if e != 0 {
+		0); e != 0 {
 		return nil, 0, e
 	}
 	return unsafe.Pointer(&addr.addrs), int(addr.num), nil

@@ -70,7 +70,7 @@ func (m *ASPAC) handleMessage(c *ASP) {
 			m.result <- e
 		}
 	} else {
-		c.sendAnswer(&ASPACAck{mode: m.mode, ctx: m.ctx})
+		c.send(&ASPACAck{mode: m.mode, ctx: m.ctx})
 	}
 }
 
@@ -189,7 +189,7 @@ func (m *ASPIA) handleMessage(c *ASP) {
 			m.result <- e
 		}
 	} else {
-		c.sendAnswer(&ASPIAAck{ctx: m.ctx})
+		c.send(&ASPIAAck{ctx: m.ctx})
 	}
 }
 
@@ -261,12 +261,15 @@ func (m *ASPACAck) handleResult(message) {}
 
 func (m *ASPACAck) marshal() (uint8, uint8, []byte) {
 	buf := new(bytes.Buffer)
+
 	// Traffic Mode Type (Optional)
 	if m.mode != 0 {
 		writeUint32(buf, 0x000b, m.mode)
 	}
+
 	// Routing Context (Optional)
 	writeUint32(buf, 0x0006, m.ctx)
+
 	// Info String (Optional)
 	// if len(m.info) != 0 {
 	// 	writeInfo(buf, m.info)
@@ -276,7 +279,7 @@ func (m *ASPACAck) marshal() (uint8, uint8, []byte) {
 
 func (m *ASPACAck) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
-	case 0x000B: // Traffic Mode Type (Optional)
+	case 0x000b: // Traffic Mode Type (Optional)
 		m.mode, e = readUint32(r, l)
 	case 0x0006: // Routing Context (Optional)
 		m.ctx, e = readUint32(r, l)
@@ -315,8 +318,10 @@ func (m *ASPIAAck) handleResult(message) {}
 
 func (m *ASPIAAck) marshal() (uint8, uint8, []byte) {
 	buf := new(bytes.Buffer)
+
 	// Routing Context (Optional)
 	writeUint32(buf, 0x0006, m.ctx)
+
 	// Info String (Optional)
 	// if len(m.info) != 0 {
 	// 	writeInfo(buf, m.info)

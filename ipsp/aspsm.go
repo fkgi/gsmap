@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"time"
 )
 
 /*
@@ -40,7 +41,7 @@ func (m *ASPUP) handleMessage(c *ASP) {
 			m.result <- e
 		}
 	} else {
-		c.sendAnswer(&ASPUPAck{})
+		c.send(&ASPUPAck{})
 	}
 }
 
@@ -56,7 +57,7 @@ func (m *ASPUP) handleResult(msg message) {
 }
 
 func (m *ASPUP) marshal() (uint8, uint8, []byte) {
-	buf := new(bytes.Buffer)
+	// buf := new(bytes.Buffer)
 
 	// ASP Identifier (Optional)
 	// if m.id != nil {
@@ -67,20 +68,20 @@ func (m *ASPUP) marshal() (uint8, uint8, []byte) {
 	// if len(m.info) != 0 {
 	// 	writeInfo(buf, m.info)
 	// }
-	return 0x03, 0x01, buf.Bytes()
+	return 0x03, 0x01, []byte{}
 }
 
 func (m *ASPUP) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
-	switch t {
+	// switch t {
 	// case 0x0011: // ASP Identifier (Optional)
 	// 	var id uint32
 	// 	id, e = readUint32(r, l)
 	// 	m.id = &id
 	// case 0x0004:	// Info String (Optional)
 	// 	m.info, e = readInfo(r, l)
-	default:
-		_, e = r.Seek(int64(l), io.SeekCurrent)
-	}
+	// default:
+	_, e = r.Seek(int64(l), io.SeekCurrent)
+	//}
 	return
 }
 
@@ -98,31 +99,38 @@ ASPDN is ASP Down message. (Message type = 0x02)
 */
 type ASPDN struct {
 	// info   string
-	result chan error
+	sock int
 }
 
 func (m *ASPDN) handleMessage(c *ASP) {
-	if m.result != nil {
-		if e := c.handleCtrlReq(m); e != nil {
-			m.result <- e
-		}
-	} else {
-		c.sendAnswer(&ASPDNAck{})
+	if m.sock == 0 {
+		c.send(&ASPDNAck{})
+		time.AfterFunc(time.Millisecond*100, func() {
+			sockClose(m.sock)
+		})
+		c.stat = Down
+	} else if e := c.handleCtrlReq(m); e != nil {
+		sockClose(m.sock)
 	}
 }
 
 func (m *ASPDN) handleResult(msg message) {
-	switch res := msg.(type) {
-	case *ERR:
-		m.result <- fmt.Errorf("error with code %s", res.code)
-	case *ASPDNAck:
-		m.result <- nil
-	default:
-		m.result <- fmt.Errorf("unexpected result")
-	}
+	/*
+		switch res := msg.(type) {
+		case *ERR:
+			m.result <- fmt.Errorf("error with code %s", res.code)
+		case *ASPDNAck:
+			m.result <- nil
+		default:
+			m.result <- fmt.Errorf("unexpected result")
+		}
+	*/
+	sockClose(m.sock)
 }
 
 func (m *ASPDN) marshal() (uint8, uint8, []byte) {
+	// buf := new(bytes.Buffer)
+
 	// Info String (Optioal)
 	// if len(m.info) != 0 {
 	// 	writeInfo(buf, m.info)
@@ -131,12 +139,12 @@ func (m *ASPDN) marshal() (uint8, uint8, []byte) {
 }
 
 func (m *ASPDN) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
-	switch t {
+	// switch t {
 	// case 0x0004:	// Info String (Optional)
 	// 	m.info, e = readInfo(r, l)
-	default:
-		_, e = r.Seek(int64(l), io.SeekCurrent)
-	}
+	// default:
+	_, e = r.Seek(int64(l), io.SeekCurrent)
+	// }
 	return
 }
 
@@ -163,7 +171,7 @@ func (m *BEAT) handleMessage(c *ASP) {
 			m.result <- e
 		}
 	} else {
-		c.sendAnswer(&BEATAck{})
+		c.send(&BEATAck{data: m.data})
 	}
 }
 
@@ -227,21 +235,22 @@ func (m *ASPUPAck) handleMessage(c *ASP) { c.handleCtrlAns(m) }
 func (m *ASPUPAck) handleResult(message) {}
 
 func (m *ASPUPAck) marshal() (uint8, uint8, []byte) {
-	buf := new(bytes.Buffer)
+	// buf := new(bytes.Buffer)
+
 	// Info String (Optioal)
 	// if len(m.info) != 0 {
 	// 	writeInfo(buf, m.info)
 	// }
-	return 0x03, 0x04, buf.Bytes()
+	return 0x03, 0x04, []byte{}
 }
 
 func (m *ASPUPAck) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
-	switch t {
+	// switch t {
 	// case 0x0004:	// Info String (Optional)
 	// 	m.info, e = readInfo(r, l)
-	default:
-		_, e = r.Seek(int64(l), io.SeekCurrent)
-	}
+	// default:
+	_, e = r.Seek(int64(l), io.SeekCurrent)
+	// }
 	return
 }
 
@@ -265,21 +274,22 @@ func (m *ASPDNAck) handleMessage(c *ASP) { c.handleCtrlAns(m) }
 func (m *ASPDNAck) handleResult(message) {}
 
 func (m *ASPDNAck) marshal() (uint8, uint8, []byte) {
-	buf := new(bytes.Buffer)
+	// buf := new(bytes.Buffer)
+
 	// Info String (Optioal)
 	// if len(m.info) != 0 {
 	// 	writeInfo(buf, m.info)
 	// }
-	return 0x03, 0x05, buf.Bytes()
+	return 0x03, 0x05, []byte{}
 }
 
 func (m *ASPDNAck) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
-	switch t {
+	// switch t {
 	// case 0x0004:	// Info String (Optional)
 	// 	m.info, e = readInfo(r, l)
-	default:
-		_, e = r.Seek(int64(l), io.SeekCurrent)
-	}
+	// default:
+	_, e = r.Seek(int64(l), io.SeekCurrent)
+	// }
 	return
 }
 

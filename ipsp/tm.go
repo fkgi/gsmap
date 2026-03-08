@@ -12,10 +12,10 @@ TM: RTransfer Messages
 Message class = 0x01
 */
 
-type Cause uint32
+// Cause defined in 3.12 of Q.713
+type Cause uint16
 
 const (
-	Success                               Cause = 0x0000
 	NoTranslationForAnAddressOfSuchNature Cause = 0x0100
 	NoTranslationForThisSpecificAddress   Cause = 0x0101
 	SubsystemCongestion                   Cause = 0x0102
@@ -24,13 +24,6 @@ const (
 	MtpFailure                            Cause = 0x0105
 	NetworkCongestion                     Cause = 0x0106
 	Unqualified                           Cause = 0x0107
-	ErrorInMessageTransport               Cause = 0x0108
-	ErrorInLocalProcessing                Cause = 0x0109
-	DestinationCannotPerformReassembly    Cause = 0x010a
-	SccpFailure                           Cause = 0x010b
-	HopCounterViolation                   Cause = 0x010c
-	SegmentationNotSupported              Cause = 0x010d
-	SegmentationFailure                   Cause = 0x010e
 )
 
 /*
@@ -105,50 +98,55 @@ type DATA struct {
 	returnOnError bool
 	protocolClass uint8
 	cause         Cause
-	//cgpa          SCCPAddr
-	//cdpa          SCCPAddr
-	//data          []byte
-
 	userData
 
+	result chan error
 	// correlation *uint32
 }
 
-type TxDATA DATA
-type RxDATA DATA
+func (m *DATA) handleMessage(c *ASP) {
+	if m.result != nil {
+		c.TxTransfer++
 
-func (m *TxDATA) handleMessage(c *ASP) {
-	c.TxTransfer++
+		cls, typ, b := m.marshal()
+		buf := new(bytes.Buffer)
 
-	cls, typ, b := m.marshal()
-	buf := new(bytes.Buffer)
+		// version
+		buf.WriteByte(1)
+		// reserved
+		buf.WriteByte(0)
+		// Message Class
+		buf.WriteByte(cls)
+		// Message Type
+		buf.WriteByte(typ)
+		// Message Length
+		binary.Write(buf, binary.BigEndian, uint32(len(b)+8))
+		// Message Data
+		buf.Write(b)
 
-	// version
-	buf.WriteByte(1)
-	// reserved
-	buf.WriteByte(0)
-	// Message Class
-	buf.WriteByte(cls)
-	// Message Type
-	buf.WriteByte(typ)
-	// Message Length
-	binary.Write(buf, binary.BigEndian, uint32(len(b)+8))
-	// Message Data
-	buf.Write(b)
-
-	i, e := sctpSend(c.sock, buf.Bytes(), uint16(m.sls)+1)
-	if TxFailureNotify != nil {
+		i, e := sctpSend(c.sock, buf.Bytes(), uint16(m.sls)+1)
 		if e != nil {
-			TxFailureNotify(e, buf.Bytes())
+			m.result <- e
 		} else if i != len(buf.Bytes()) {
-			TxFailureNotify(fmt.Errorf("failed to send complete data"), buf.Bytes())
+			m.result <- fmt.Errorf("failed to send complete data")
+		} else {
+			m.result <- nil
 		}
+	} else if m.cause == 0 {
+		c.RxTransfer++
+		c.handler(m.cgpa, m.cdpa, m.data)
+	} else {
+		if TxFailureNotify != nil {
+			TxFailureNotify(
+				fmt.Errorf("error response(cause=%x) from peer", m.cause), m.data)
+		}
+		c.RxResponse++
 	}
 }
 
-func (*TxDATA) handleResult(message) {}
+func (*DATA) handleResult(message) {}
 
-func (m *TxDATA) marshal() (uint8, uint8, []byte) {
+func (m *DATA) marshal() (uint8, uint8, []byte) {
 	buf := new(bytes.Buffer)
 
 	// Network Appearance (Optional)
@@ -161,7 +159,7 @@ func (m *TxDATA) marshal() (uint8, uint8, []byte) {
 
 	// Protocol Data
 	ud := new(bytes.Buffer)
-	if m.cause == Success {
+	if m.cause == 0 {
 		ud.WriteByte(0x09)
 		if m.returnOnError {
 			ud.WriteByte((m.protocolClass & 0x0f) | 0x80)
@@ -208,27 +206,7 @@ func (m *TxDATA) marshal() (uint8, uint8, []byte) {
 	return 0x01, 0x01, buf.Bytes()
 }
 
-func (m *RxDATA) handleMessage(c *ASP) {
-	if m.cause == Success {
-		c.RxTransfer++
-		if c.handler != nil {
-			c.handler(m.cgpa, m.cdpa, m.data)
-		} else if m.returnOnError {
-			c.msgQ <- &TxDATA{
-				ctx:      m.ctx,
-				cause:    SubsystemFailure,
-				userData: userData{cgpa: c.gt, cdpa: m.cgpa, data: m.data}}
-		}
-	} else {
-		if TxFailureNotify != nil {
-			TxFailureNotify(
-				fmt.Errorf("error response(cause=%x) from peer", m.cause), m.data)
-		}
-		c.RxResponse++
-	}
-}
-
-func (m *RxDATA) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
+func (m *DATA) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
 	case 0x0200: // Network Appearance (Optional)
 		m.na = new(uint32)

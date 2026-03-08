@@ -56,7 +56,7 @@ type DUNA struct {
 
 func (m *DUNA) handleMessage(c *ASP) {
 	if m.result != nil {
-		m.result <- c.sendAnswer(m)
+		m.result <- c.send(m)
 	} else {
 		if DunaNotify != nil {
 			DunaNotify(m.apc)
@@ -68,6 +68,7 @@ func (m *DUNA) handleResult(message) {}
 
 func (m *DUNA) marshal() (uint8, uint8, []byte) {
 	buf := new(bytes.Buffer)
+
 	// Routing Context (Optional)
 	if m.ctx != 0 {
 		writeUint32(buf, 0x0006, m.ctx)
@@ -85,6 +86,11 @@ func (m *DUNA) marshal() (uint8, uint8, []byte) {
 	if m.smi != 0 {
 		writeUint8(buf, 0x0112, m.smi)
 	}
+
+	// Info String (Optional)
+	// if len(m.info) != 0 {
+	//	writeInfo(buf, m.info)
+	// }
 	return 0x02, 0x01, buf.Bytes()
 }
 
@@ -150,7 +156,7 @@ type DAVA struct {
 
 func (m *DAVA) handleMessage(c *ASP) {
 	if m.result != nil {
-		m.result <- c.sendAnswer(m)
+		m.result <- c.send(m)
 	} else {
 		if DavaNotify != nil {
 			DavaNotify(m.apc)
@@ -162,6 +168,7 @@ func (m *DAVA) handleResult(message) {}
 
 func (m *DAVA) marshal() (uint8, uint8, []byte) {
 	buf := new(bytes.Buffer)
+
 	// Routing Context (Optional)
 	if m.ctx != 0 {
 		writeUint32(buf, 0x0006, m.ctx)
@@ -180,6 +187,10 @@ func (m *DAVA) marshal() (uint8, uint8, []byte) {
 		writeUint8(buf, 0x0112, m.smi)
 	}
 
+	// Info String (Optional)
+	// if len(m.info) != 0 {
+	//	writeInfo(buf, m.info)
+	// }
 	return 0x02, 0x02, buf.Bytes()
 }
 
@@ -245,7 +256,7 @@ type DAUD struct {
 
 func (m *DAUD) handleMessage(c *ASP) {
 	if m.result != nil {
-		m.result <- c.sendAnswer(m)
+		m.result <- c.send(m)
 	} else {
 		if DaudNotify != nil {
 			DaudNotify(m.apc)
@@ -258,7 +269,9 @@ func (m *DAUD) marshal() (uint8, uint8, []byte) {
 	buf := new(bytes.Buffer)
 
 	// Routing Context (Optional)
-	writeUint32(buf, 0x0006, m.ctx)
+	if m.ctx != 0 {
+		writeUint32(buf, 0x0006, m.ctx)
+	}
 
 	// Affected PC
 	writeAPC(buf, m.apc)
@@ -291,7 +304,7 @@ func (m *DAUD) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 		m.apc, e = readAPC(r, l)
 	case 0x8003: // SSN (Optional)
 		m.ssn, e = readUint8(r, l)
-	case 0x010C: // Cause/User (Optional)
+	case 0x010c: // Cause/User (Optional)
 		if l != 8 {
 			return errors.New("invalid length of parameter")
 		}
@@ -353,7 +366,7 @@ type SCON struct {
 
 func (m *SCON) handleMessage(c *ASP) {
 	if m.result != nil {
-		m.result <- c.sendAnswer(m)
+		m.result <- c.send(m)
 	} else {
 		if SconNotify != nil {
 			SconNotify(m.apc, m.congestion)
@@ -361,6 +374,37 @@ func (m *SCON) handleMessage(c *ASP) {
 	}
 }
 func (m *SCON) handleResult(message) {}
+
+func (m *SCON) marshal() (uint8, uint8, []byte) {
+	buf := new(bytes.Buffer)
+
+	// Routing Context (Optional)
+	if m.ctx != 0 {
+		writeUint32(buf, 0x0006, m.ctx)
+	}
+
+	// Affected PC
+	writeAPC(buf, m.apc)
+
+	// SSN (Optional)
+	if m.ssn != 0 {
+		writeUint8(buf, 0x8003, m.ssn)
+	}
+
+	// Congestion Level
+	writeUint32(buf, 0x0118, m.congestion)
+
+	// SMI (Optional)
+	if m.smi != 0 {
+		writeUint8(buf, 0x0112, m.smi)
+	}
+
+	// Info String (Optional)
+	// if len(m.info) != 0 {
+	// 	writeInfo(buf, m.info)
+	// }
+	return 0x02, 0x04, buf.Bytes()
+}
 
 func (m *SCON) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
@@ -380,31 +424,6 @@ func (m *SCON) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 		_, e = r.Seek(int64(l), io.SeekCurrent)
 	}
 	return
-}
-
-func (m *SCON) marshal() (uint8, uint8, []byte) {
-	buf := new(bytes.Buffer)
-	// Routing Context (Optional)
-	if m.ctx != 0 {
-		writeUint32(buf, 0x0006, m.ctx)
-	}
-	// SSN (Optional)
-	if m.ssn != 0 {
-		writeUint8(buf, 0x8003, m.ssn)
-	}
-	// Affected PC
-	writeAPC(buf, m.apc)
-	// Congestion Level
-	writeUint32(buf, 0x0118, m.congestion)
-	// SMI (Optional)
-	if m.smi != 0 {
-		writeUint8(buf, 0x0112, m.smi)
-	}
-	// Info String (Optional)
-	// if len(m.info) != 0 {
-	// 	writeInfo(buf, m.info)
-	// }
-	return 0x02, 0x04, buf.Bytes()
 }
 
 /*
@@ -447,7 +466,7 @@ type DUPU struct {
 
 func (m *DUPU) handleMessage(c *ASP) {
 	if m.result != nil {
-		m.result <- c.sendAnswer(m)
+		m.result <- c.send(m)
 	} else {
 		if DupuNotify != nil {
 			DupuNotify(m.apc, m.cause)
@@ -458,18 +477,20 @@ func (m *DUPU) handleResult(message) {}
 
 func (m *DUPU) marshal() (uint8, uint8, []byte) {
 	buf := new(bytes.Buffer)
+
 	// Routing Context (Optional)
 	if m.ctx != 0 {
 		writeUint32(buf, 0x0006, m.ctx)
 	}
+
 	// Affected PC
 	writeAPC(buf, m.apc)
-	// User/Cause (Optional)
-	if m.user == 3 {
-		binary.Write(buf, binary.BigEndian, uint16(0x010C))
-		binary.Write(buf, binary.BigEndian, m.cause)
-		binary.Write(buf, binary.BigEndian, m.user)
-	}
+
+	// User/Cause
+	binary.Write(buf, binary.BigEndian, uint16(0x010c))
+	binary.Write(buf, binary.BigEndian, m.cause)
+	binary.Write(buf, binary.BigEndian, m.user)
+
 	// Info String (Optional)
 	// if len(m.info) != 0 {
 	// 	writeInfo(buf, m.info)
@@ -483,10 +504,12 @@ func (m *DUPU) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 		m.ctx, e = readUint32(r, l)
 	case 0x0012: // Affected Point Code
 		m.apc, e = readAPC(r, l)
-	case 0x010C: // Cause/User
-		if e = binary.Read(r, binary.BigEndian, &m.cause); e == nil {
-			e = binary.Read(r, binary.BigEndian, &m.user)
+	case 0x010c: // Cause/User
+		if l != 8 {
+			return errors.New("invalid length of parameter")
 		}
+		binary.Read(r, binary.BigEndian, m.cause)
+		binary.Read(r, binary.BigEndian, m.user)
 	// case 0x0004:	// Info String (Optional)
 	// 	m.info, e = readInfo(r, l)
 	default:
@@ -538,7 +561,7 @@ type DRST struct {
 
 func (m *DRST) handleMessage(c *ASP) {
 	if m.result != nil {
-		m.result <- c.sendAnswer(m)
+		m.result <- c.send(m)
 	} else {
 		if DrstNotify != nil {
 			DrstNotify(m.apc)
@@ -549,20 +572,25 @@ func (m *DRST) handleResult(message) {}
 
 func (m *DRST) marshal() (uint8, uint8, []byte) {
 	buf := new(bytes.Buffer)
+
 	// Routing Context (Optional)
 	if m.ctx != 0 {
 		writeUint32(buf, 0x0006, m.ctx)
 	}
+
 	// Affected PC
 	writeAPC(buf, m.apc)
+
 	// SSN (Optional)
 	if m.ssn != 0 {
 		writeUint8(buf, 0x8003, m.ssn)
 	}
+
 	// SMI (Optional)
 	if m.smi != 0 {
 		writeUint8(buf, 0x0112, m.smi)
 	}
+
 	// Info String (Optional)
 	// if len(m.info) != 0 {
 	// 	writeInfo(buf, m.info)
