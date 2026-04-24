@@ -19,11 +19,9 @@ func sockClose(fd int) {
 	syscall.Close(fd)
 }
 
-/*
 func sockListen(fd int) error {
 	return syscall.Listen(fd, syscall.SOMAXCONN)
 }
-*/
 
 func sctpBindx(fd int, addr []byte) error {
 	if _, _, e := syscall.Syscall6(syscall.SYS_SETSOCKOPT,
@@ -96,12 +94,10 @@ func sctpConnectx(fd int, addr []byte) (int, error) {
 	return int(peel.sd), nil
 }
 
-/*
-	func sctpAccept(fd int) (nfd int, e error) {
-		nfd, _, e = syscall.Accept(fd)
-		return
-	}
-*/
+func sctpAccept(fd int) (nfd int, e error) {
+	nfd, _, e = syscall.Accept(fd)
+	return
+}
 
 func sctpSend(fd int, b []byte, sid uint16) (int, error) {
 	buf := new(bytes.Buffer)

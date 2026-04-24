@@ -42,6 +42,8 @@ func NewSignalingEndpoint(a *SCTPAddr) (se *SignalingEndpoint, e error) {
 	} else if sock, e = sockOpen(); e != nil {
 	} else if e = sctpBindx(sock, a.rawBytes()); e != nil {
 		sockClose(sock)
+	} else if e = sockListen(sock); e != nil {
+		sockClose(sock)
 	}
 	if e != nil {
 		return
@@ -97,49 +99,23 @@ func NewSignalingEndpoint(a *SCTPAddr) (se *SignalingEndpoint, e error) {
 			}
 		}()
 	}
-	return
-}
-
-/*
-func (se *SignalingEndpoint) Listen() (e error) {
-	if e = sockListen(se.sock); e != nil {
-		sockClose(se.sock)
-	}
-	return
-}
-*/
-
-func (se *SignalingEndpoint) ConnectTo(a *SCTPAddr, ctx uint32, apc uint32) error {
-	if a == nil || len(a.IP) == 0 {
-		return fmt.Errorf("nil address")
-	} else if a.IP[0].To4() == nil {
-		return fmt.Errorf("invalid address")
-	}
 
 	go func() {
-		for {
-			if s, e := sctpConnectx(se.sock, a.rawBytes()); e == nil {
+		for s, e := sctpAccept(sock); e == nil; s, e = sctpAccept(sock) {
+			go func() {
 				asps := <-se.asps
-				asps[s] = &ASP{sock: s, apc: apc, ctx: ctx, handler: se.PayloadHandler}
+				asps[s] = &ASP{sock: s, handler: se.PayloadHandler}
 				se.asps <- asps
 
-				asps[s].connectAndServe(se.sharedQ)
+				asps[s].listenAndServe(se.sharedQ)
 
 				asps = <-se.asps
 				delete(asps, s)
 				se.asps <- asps
-			} else if SctpNotify != nil {
-				SctpNotify(s, "failed to connect: "+e.Error())
-			}
-
-			select {
-			case <-se.block:
-				return
-			case <-time.After(tr):
-			}
+			}()
 		}
 	}()
-	return nil
+	return
 }
 
 func (se *SignalingEndpoint) Close() {

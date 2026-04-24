@@ -103,11 +103,8 @@ func getMessage(c, t byte) message {
 
 type ASP struct {
 	sock int
-	apc  uint32
 	ctx  uint32
-
-	msgQ    chan message
-	ctrlMsg message
+	msgQ chan message
 
 	handler func(SCCPAddr, SCCPAddr, []byte)
 
