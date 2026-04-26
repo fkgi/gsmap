@@ -102,17 +102,17 @@ func NewSignalingEndpoint(a *SCTPAddr) (se *SignalingEndpoint, e error) {
 
 	go func() {
 		for s, e := sctpAccept(sock); e == nil; s, e = sctpAccept(sock) {
-			go func() {
+			go func(s int) {
 				asps := <-se.asps
 				asps[s] = &ASP{sock: s, handler: se.PayloadHandler}
 				se.asps <- asps
 
-				asps[s].listenAndServe(se.sharedQ)
+				asps[s].acceptAndServe(se.sharedQ)
 
 				asps = <-se.asps
 				delete(asps, s)
 				se.asps <- asps
-			}()
+			}(s)
 		}
 	}()
 	return

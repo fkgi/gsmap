@@ -102,9 +102,10 @@ func getMessage(c, t byte) message {
 }
 
 type ASP struct {
-	sock int
-	ctx  uint32
-	msgQ chan message
+	sock    int
+	ctx     uint32
+	msgQ    chan message
+	ctrlMsg message
 
 	handler func(SCCPAddr, SCCPAddr, []byte)
 
@@ -132,89 +133,70 @@ func (c *ASP) RemoteAddr() net.Addr {
 	return resolveFromRawAddr(ptr, n)
 }
 
-func (c *ASP) connectAndServe(sharedQ chan userData) {
+func (c *ASP) acceptAndServe(sharedQ chan userData) {
 	c.msgQ = make(chan message, 1024)
 	c.ctrlMsg = nil
 	c.stat = Down
 
-	go func() {
-		// ASP up
-		r := make(chan error, 1)
-		c.msgQ <- &ASPUP{result: r}
-		if <-r != nil {
-			sockClose(c.sock)
-			return
-		}
-		c.stat = Inactive
-
-		// ASP active
-		r = make(chan error, 1)
-		c.msgQ <- &ASPAC{mode: Loadshare, ctx: c.ctx, result: r}
-		if <-r == nil {
-			c.stat = Active
-			return
-		}
-
-		// ASP down
-		c.msgQ <- &ASPDN{sock: c.sock}
-	}()
-
-	go func() { // rx data procedure
-		for {
-			data, e := sctpRecvmsg(c.sock)
-			if eno, ok := e.(*syscall.Errno); ok && eno.Temporary() {
-				continue
-			} else if e != nil {
-				break
-			} else if data[0] != 1 || len(data) < 8 {
-				if RxFailureNotify != nil {
-					RxFailureNotify(fmt.Errorf("invalid lengh of data"), data)
-				}
-				continue
-			}
-
-			m := getMessage(data[2], data[3])
-			if m == nil {
-				if RxFailureNotify != nil {
-					RxFailureNotify(fmt.Errorf("unknown message: %x-%x", data[2], data[3]), data)
-				}
-				continue
-			}
-
-			for r := bytes.NewReader(data[8 : uint32(data[4])<<24|uint32(data[5])<<16|uint32(data[6])<<8|uint32(data[7])]); r.Len() > 4; {
-				var t, l uint16
-				binary.Read(r, binary.BigEndian, &t)
-				binary.Read(r, binary.BigEndian, &l)
-				l -= 4
-
-				if e := m.unmarshal(t, l, r); e != nil {
-					if RxFailureNotify != nil {
-						RxFailureNotify(fmt.Errorf("invalid data for tag %x: %v", t, e), data)
-					}
-				}
-				if l%4 != 0 {
-					r.Seek(int64(4-l%4), io.SeekCurrent)
-				}
-			}
-
-			if msg, ok := m.(*DATA); ok && msg.cause == 0 && msg.protocolClass == 0 {
-				c.RxTransfer++
-				sharedQ <- msg.userData
-			} else {
-				c.msgQ <- m
-			}
-		}
-
-		c.ctrlMsg = nil
-		sockClose(c.sock)
-		close(c.msgQ)
-	}()
+	// Rx data procedure
+	go c.handleRx(sharedQ)
 
 	// event procedure
 	for m, ok := <-c.msgQ; ok; m, ok = <-c.msgQ {
 		m.handleMessage(c)
 	}
 	c.stat = Down
+}
+
+func (c *ASP) handleRx(sharedQ chan userData) {
+	for {
+		data, e := sctpRecvmsg(c.sock)
+		if eno, ok := e.(*syscall.Errno); ok && eno.Temporary() {
+			continue
+		} else if e != nil {
+			break
+		} else if data[0] != 1 || len(data) < 8 {
+			if RxFailureNotify != nil {
+				RxFailureNotify(fmt.Errorf("invalid lengh of data"), data)
+			}
+			continue
+		}
+
+		m := getMessage(data[2], data[3])
+		if m == nil {
+			if RxFailureNotify != nil {
+				RxFailureNotify(fmt.Errorf("unknown message: %x-%x", data[2], data[3]), data)
+			}
+			continue
+		}
+
+		for r := bytes.NewReader(data[8 : uint32(data[4])<<24|uint32(data[5])<<16|uint32(data[6])<<8|uint32(data[7])]); r.Len() > 4; {
+			var t, l uint16
+			binary.Read(r, binary.BigEndian, &t)
+			binary.Read(r, binary.BigEndian, &l)
+			l -= 4
+
+			if e := m.unmarshal(t, l, r); e != nil {
+				if RxFailureNotify != nil {
+					RxFailureNotify(fmt.Errorf("invalid data for tag %x: %v", t, e), data)
+				}
+			}
+			if l%4 != 0 {
+				r.Seek(int64(4-l%4), io.SeekCurrent)
+			}
+		}
+
+		if msg, ok := m.(*DATA); ok && msg.cause == 0 && msg.protocolClass == 0 {
+			c.RxTransfer++
+			sharedQ <- msg.userData
+		} else {
+			c.msgQ <- m
+		}
+	}
+
+	c.ctrlMsg = nil
+	sockClose(c.sock)
+	close(c.msgQ)
 }
 
 func (c *ASP) handleCtrlReq(m message) (e error) {

@@ -69,7 +69,8 @@ func (m *ASPAC) handleMessage(c *ASP) {
 		if e := c.handleCtrlReq(m); e != nil {
 			m.result <- e
 		}
-	} else {
+	} else if c.stat == Inactive {
+		c.stat = Active
 		c.send(&ASPACAck{mode: m.mode, ctx: m.ctx})
 	}
 }
@@ -98,7 +99,9 @@ func (m *ASPAC) marshal() (uint8, uint8, []byte) {
 	}
 
 	// Routing Context (Optional)
-	writeUint32(buf, 0x0006, m.ctx)
+	if m.ctx != 0 {
+		writeUint32(buf, 0x0006, m.ctx)
+	}
 
 	// TID Label (Optional)
 	// if m.tid != nil {
@@ -188,7 +191,8 @@ func (m *ASPIA) handleMessage(c *ASP) {
 		if e := c.handleCtrlReq(m); e != nil {
 			m.result <- e
 		}
-	} else {
+	} else if c.stat == Active {
+		c.stat = Inactive
 		c.send(&ASPIAAck{ctx: m.ctx})
 	}
 }
@@ -208,7 +212,9 @@ func (m *ASPIA) marshal() (uint8, uint8, []byte) {
 	buf := new(bytes.Buffer)
 
 	// Routing Context (Optional)
-	writeUint32(buf, 0x0006, m.ctx)
+	if m.ctx == 0 {
+		writeUint32(buf, 0x0006, m.ctx)
+	}
 
 	// Info String (Optional)
 	// if len(m.info) != 0 {
@@ -268,7 +274,9 @@ func (m *ASPACAck) marshal() (uint8, uint8, []byte) {
 	}
 
 	// Routing Context (Optional)
-	writeUint32(buf, 0x0006, m.ctx)
+	if m.ctx != 0 {
+		writeUint32(buf, 0x0006, m.ctx)
+	}
 
 	// Info String (Optional)
 	// if len(m.info) != 0 {
@@ -320,7 +328,9 @@ func (m *ASPIAAck) marshal() (uint8, uint8, []byte) {
 	buf := new(bytes.Buffer)
 
 	// Routing Context (Optional)
-	writeUint32(buf, 0x0006, m.ctx)
+	if m.ctx != 0 {
+		writeUint32(buf, 0x0006, m.ctx)
+	}
 
 	// Info String (Optional)
 	// if len(m.info) != 0 {

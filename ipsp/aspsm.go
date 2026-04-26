@@ -40,7 +40,8 @@ func (m *ASPUP) handleMessage(c *ASP) {
 		if e := c.handleCtrlReq(m); e != nil {
 			m.result <- e
 		}
-	} else {
+	} else if c.stat == Down {
+		c.stat = Inactive
 		c.send(&ASPUPAck{})
 	}
 }
