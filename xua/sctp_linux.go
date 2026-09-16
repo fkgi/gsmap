@@ -10,8 +10,11 @@ import (
 	"unsafe"
 )
 
-func sockOpen() (int, error) {
-	return syscall.Socket(syscall.AF_INET, syscall.SOCK_SEQPACKET, syscall.IPPROTO_SCTP)
+func sockSeqpacketOpen() (int, error) {
+	return syscall.Socket(
+		syscall.AF_INET,
+		syscall.SOCK_SEQPACKET|syscall.SOCK_CLOEXEC,
+		syscall.IPPROTO_SCTP)
 }
 
 func sockClose(fd int) {
@@ -26,7 +29,8 @@ func sockListen(fd int) error {
 */
 
 func sctpBindx(fd int, addr []byte) error {
-	if _, _, e := syscall.Syscall6(syscall.SYS_SETSOCKOPT,
+	if _, _, e := syscall.Syscall6(
+		syscall.SYS_SETSOCKOPT,
 		uintptr(fd),
 		syscall.IPPROTO_SCTP,
 		100, // SCTP_SOCKOPT_BINDX_ADD
@@ -45,7 +49,8 @@ func sctpConnectx(fd int, addr []byte) (int, error) {
 		maxAttemts   uint16
 		maxInitTimeo uint16
 	}{numOstreams: 17}
-	if _, _, e := syscall.Syscall6(syscall.SYS_SETSOCKOPT,
+	if _, _, e := syscall.Syscall6(
+		syscall.SYS_SETSOCKOPT,
 		uintptr(fd),
 		syscall.IPPROTO_SCTP,
 		2, // SCTP_INITMSG
@@ -55,7 +60,8 @@ func sctpConnectx(fd int, addr []byte) (int, error) {
 		return 0, e
 	}
 
-	t, _, e := syscall.Syscall6(syscall.SYS_SETSOCKOPT,
+	t, _, e := syscall.Syscall6(
+		syscall.SYS_SETSOCKOPT,
 		uintptr(fd),
 		syscall.IPPROTO_SCTP,
 		110, // SCTP_SOCKOPT_CONNECTX
@@ -71,7 +77,8 @@ func sctpConnectx(fd int, addr []byte) (int, error) {
 		sd  int32
 	}{aid: int32(t)}
 	l := unsafe.Sizeof(peel)
-	if _, _, e := syscall.Syscall6(syscall.SYS_GETSOCKOPT,
+	if _, _, e := syscall.Syscall6(
+		syscall.SYS_GETSOCKOPT,
 		uintptr(fd),
 		syscall.IPPROTO_SCTP,
 		102, // SCTP_SOCKOPT_PEELOFF
@@ -90,7 +97,7 @@ func sctpConnectx(fd int, addr []byte) (int, error) {
 	}
 */
 
-func sctpSend(fd int, b []byte, sid uint16) (int, error) {
+func sctpSend(fd int, b []byte, sid uint16) (n int, e error) {
 	hdr := syscall.Cmsghdr{
 		Level: syscall.IPPROTO_SCTP,
 		Type:  2, //SCTP_SNDINFO

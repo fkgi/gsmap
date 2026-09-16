@@ -31,7 +31,7 @@ func (t *Transaction) GetContext() gsmap.AppContext {
 }
 
 func (t *Transaction) send(m Message) Message {
-	if send(t.CdPA, m) != nil {
+	if send(t.CdPA, LocalGT, m) != nil {
 		return &TcAbort{dtid: t.otid, pCause: TcNoDestination}
 	}
 
@@ -88,7 +88,7 @@ func GetTransaction(id uint32) (t *Transaction) {
 }
 
 func (t *Transaction) End(c ...gsmap.Component) {
-	send(t.CdPA, &TcEnd{dtid: t.dtid, component: c})
+	send(t.CdPA, LocalGT, &TcEnd{dtid: t.dtid, component: c})
 	t.deregister()
 }
 
@@ -110,7 +110,7 @@ func (t *Transaction) Continue(c ...gsmap.Component) ([]gsmap.Component, error) 
 }
 
 func (t *Transaction) Reject() {
-	send(t.CdPA, &TcAbort{dtid: t.dtid, uCause: &ABRT{Source: SvcUser}})
+	send(t.CdPA, LocalGT, &TcAbort{dtid: t.dtid, uCause: &ABRT{Source: SvcUser}})
 	t.deregister()
 }
 
@@ -171,13 +171,13 @@ func acceptTC(msg *TcBegin, cgpa xua.SCCPAddr) {
 	} else if dlg, ok := msg.dialogue.(*AARQ); ok {
 		dres = DialogueHandler(*dlg)
 		if re, ok := dres.(*ABRT); ok {
-			send(cgpa, &TcAbort{dtid: t.dtid, uCause: re})
+			send(cgpa, LocalGT, &TcAbort{dtid: t.dtid, uCause: re})
 			return
 		} else if re, ok := dres.(*AARE); !ok {
-			send(cgpa, &TcAbort{dtid: t.dtid, pCause: TcUnrecognizedMessageType})
+			send(cgpa, LocalGT, &TcAbort{dtid: t.dtid, pCause: TcUnrecognizedMessageType})
 			return
 		} else if re.Result != Accept {
-			send(cgpa, &TcEnd{dtid: t.dtid, dialogue: dres})
+			send(cgpa, LocalGT, &TcEnd{dtid: t.dtid, dialogue: dres})
 			return
 		} else {
 			t.ctx = re.Context
@@ -191,7 +191,7 @@ func acceptTC(msg *TcBegin, cgpa xua.SCCPAddr) {
 				dtid:   t.dtid,
 				uCause: &ABRT{Source: SvcUser}})
 		} else {*/
-		send(cgpa, &TcAbort{
+		send(cgpa, LocalGT, &TcAbort{
 			dtid: t.dtid,
 			uCause: &AARE{
 				Context:   newctx,
@@ -206,12 +206,12 @@ func acceptTC(msg *TcBegin, cgpa xua.SCCPAddr) {
 	} else if len(cres) == 0 && len(msg.component) == 0 && following == nil {
 		t.Reject()
 	} else if following == nil {
-		send(cgpa, &TcEnd{
+		send(cgpa, LocalGT, &TcEnd{
 			dtid:      t.dtid,
 			dialogue:  dres,
 			component: cres})
 		t.deregister()
-	} else if send(cgpa, &TcContinue{
+	} else if send(cgpa, LocalGT, &TcContinue{
 		otid:      t.otid,
 		dtid:      t.dtid,
 		dialogue:  dres,

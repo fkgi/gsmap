@@ -25,17 +25,13 @@ var NewInvoke = func(*Transaction, []gsmap.Component) ([]gsmap.Component, gsmap.
 }
 
 var EndPoint *xua.SignalingEndpoint
-var PeerPointCode uint32
+var LocalGT xua.SCCPAddr
 
-//var SelectASP = func() *xua.ASP {
-//	return nil
-//}
-
-func HandlePayload(cgpa xua.SCCPAddr, cdpa xua.SCCPAddr, data []byte) {
-	t, v, e := gsmap.ReadTLV(bytes.NewBuffer(data), 0x00)
+func HandlePayload(ud xua.UnitData) {
+	t, v, e := gsmap.ReadTLV(bytes.NewBuffer(ud.Data), 0x00)
 	if e != nil {
 		if RxFailureNotify != nil {
-			RxFailureNotify(fmt.Errorf("invalid data: %v", e), data)
+			RxFailureNotify(fmt.Errorf("invalid data: %v", e), ud.Data)
 		}
 		return
 	}
@@ -50,7 +46,7 @@ func HandlePayload(cgpa xua.SCCPAddr, cdpa xua.SCCPAddr, data []byte) {
 			TraceMessage(msg, Rx, e)
 		}
 		if e != nil && RxFailureNotify != nil {
-			RxFailureNotify(fmt.Errorf("invalid Unidirectional data: %v", e), data)
+			RxFailureNotify(fmt.Errorf("invalid Unidirectional data: %v", e), ud.Data)
 		}
 
 	case 0x62: // Begin
@@ -59,12 +55,12 @@ func HandlePayload(cgpa xua.SCCPAddr, cdpa xua.SCCPAddr, data []byte) {
 			TraceMessage(msg, Rx, e)
 		}
 		if e != nil {
-			sendAbort(cgpa, msg.otid, TcBadlyFormattedTransactionPortion)
+			sendAbort(ud.CgPA, msg.otid, TcBadlyFormattedTransactionPortion)
 		} else {
-			go acceptTC(msg, cgpa)
+			go acceptTC(msg, ud.CgPA)
 		}
 		if e != nil && RxFailureNotify != nil {
-			RxFailureNotify(fmt.Errorf("invalid Begin data: %v", e), data)
+			RxFailureNotify(fmt.Errorf("invalid Begin data: %v", e), ud.Data)
 		}
 
 	case 0x64: // End
@@ -80,12 +76,12 @@ func HandlePayload(cgpa xua.SCCPAddr, cdpa xua.SCCPAddr, data []byte) {
 			TraceMessage(msg, Rx, e)
 		}
 		if e == nil {
-			t.CdPA = cgpa
+			t.CdPA = ud.CgPA
 			t.rxStack <- msg
 			t.deregister()
 		}
 		if e != nil && RxFailureNotify != nil {
-			RxFailureNotify(fmt.Errorf("invalid End data: %v", e), data)
+			RxFailureNotify(fmt.Errorf("invalid End data: %v", e), ud.Data)
 		}
 
 	case 0x65: // Continue
@@ -93,27 +89,27 @@ func HandlePayload(cgpa xua.SCCPAddr, cdpa xua.SCCPAddr, data []byte) {
 			if TraceMessage != nil {
 				TraceMessage(msg, Rx, e)
 			}
-			sendAbort(cgpa, msg.otid, TcBadlyFormattedTransactionPortion)
+			sendAbort(ud.CgPA, msg.otid, TcBadlyFormattedTransactionPortion)
 
 			if RxFailureNotify != nil {
-				RxFailureNotify(fmt.Errorf("invalid Continue data: %v", e), data)
+				RxFailureNotify(fmt.Errorf("invalid Continue data: %v", e), ud.Data)
 			}
 		} else if t := GetTransaction(msg.dtid); t == nil {
 			if TraceMessage != nil {
 				TraceMessage(msg, Rx, fmt.Errorf("no active TC"))
 			}
-			sendAbort(cgpa, msg.otid, TcUnrecognizedTransactionID)
+			sendAbort(ud.CgPA, msg.otid, TcUnrecognizedTransactionID)
 		} else if len(t.rxStack) == cap(t.rxStack) {
 			if TraceMessage != nil {
 				TraceMessage(msg, Rx, fmt.Errorf("unexpected response"))
 			}
-			sendAbort(cgpa, msg.otid, TcResourceLimitation)
+			sendAbort(ud.CgPA, msg.otid, TcResourceLimitation)
 			t.deregister()
 		} else {
 			if TraceMessage != nil {
 				TraceMessage(msg, Rx, e)
 			}
-			t.CdPA = cgpa
+			t.CdPA = ud.CgPA
 			t.rxStack <- msg
 		}
 
@@ -128,12 +124,12 @@ func HandlePayload(cgpa xua.SCCPAddr, cdpa xua.SCCPAddr, data []byte) {
 			TraceMessage(msg, Rx, e)
 		}
 		if e == nil {
-			t.CdPA = cgpa
+			t.CdPA = ud.CgPA
 			t.rxStack <- msg
 			t.deregister()
 		}
 		if e != nil && RxFailureNotify != nil {
-			RxFailureNotify(fmt.Errorf("invalid Abort data: %v", e), data)
+			RxFailureNotify(fmt.Errorf("invalid Abort data: %v", e), ud.Data)
 		}
 	}
 }
@@ -149,10 +145,10 @@ func sendAbort(cdpa xua.SCCPAddr, tid uint32, cause Cause) {
 		}
 		return
 	}
-	send(cdpa, msg)
+	send(cdpa, LocalGT, msg)
 }
 
-func send(cdpa xua.SCCPAddr, msg Message) (e error) {
+func send(cdpa, cgpa xua.SCCPAddr, msg Message) (e error) {
 	if EndPoint == nil {
 		e = fmt.Errorf("failed to select destination")
 	}
@@ -160,7 +156,12 @@ func send(cdpa xua.SCCPAddr, msg Message) (e error) {
 		TraceMessage(msg, Tx, e)
 	}
 	if EndPoint != nil {
-		EndPoint.Write(PeerPointCode, cdpa, msg.marshalTc())
+		ud := xua.UnitData{
+			ReturnOnError: false,
+			CdPA:          cdpa,
+			CgPA:          cgpa,
+			Data:          msg.marshalTc()}
+		EndPoint.Write(ud)
 	}
 	return
 }

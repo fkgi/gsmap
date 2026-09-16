@@ -39,9 +39,7 @@ func handleOutgoingDialog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	n, v := getContextName(ctx)
-	if *verbose {
-		log.Println("[INFO]", "Tx new dialog", n, v)
-	}
+	traceDalog(tcap.Tx, n, v)
 
 	var t *tcap.Transaction
 	if t, cp, e = tcap.DialTC(ctx, cdpa, cp...); e != nil && e != io.EOF {

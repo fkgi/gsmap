@@ -1,9 +1,7 @@
 package xua
 
 var (
-	ErrorNotify func(id byte, c ErrCode)
-	StateNotify func(id byte, s Status)
-	SctpNotify  func(id byte, s string)
+	TraceEvent func(old, new, event string, e error)
 
 	DunaNotify func([]PointCode)
 	DavaNotify func([]PointCode)
@@ -11,6 +9,8 @@ var (
 	SconNotify func([]PointCode, uint32)
 	DupuNotify func([]PointCode, uint16)
 	DrstNotify func([]PointCode)
+
+	AsStateNotify func(string)
 
 	TxFailureNotify func(error, []byte) = nil
 	RxFailureNotify func(error, []byte) = nil

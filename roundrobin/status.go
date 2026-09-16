@@ -19,7 +19,7 @@ const constatFmt = `{
 func conStateHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf(constatFmt, "", "", "", "")))
+	fmt.Fprintf(w, constatFmt, "", "", "", "")
 	//	asp.State(), asp.LocalAddr(), xua.LocalAddr.GlobalTitle, asp.RemoteAddr())))
 }
 
@@ -52,7 +52,7 @@ const statsFmt = `{
 func statsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf(statsFmt,
+	fmt.Fprintf(w, statsFmt,
 		rxInvoke, txResult, txResultLast, txError, txAbort,
-		txInvoke, rxResult, rxResultLast, rxError, rxAbort)))
+		txInvoke, rxResult, rxResultLast, rxError, rxAbort)
 }

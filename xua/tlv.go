@@ -102,13 +102,11 @@ func readUint32(r io.ReadSeeker, l uint16) (v uint32, e error) {
 	return
 }
 
-/*
 func writeUint8(w io.Writer, t uint16, v uint8) {
 	binary.Write(w, binary.BigEndian, t)
 	binary.Write(w, binary.BigEndian, uint16(8))
 	binary.Write(w, binary.BigEndian, uint32(v))
 }
-*/
 
 func readUint8(r io.ReadSeeker, l uint16) (v uint8, e error) {
 	if l != 4 {

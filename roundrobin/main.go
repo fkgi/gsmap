@@ -3,13 +3,13 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -21,99 +21,119 @@ import (
 
 var (
 	backend string
-	verbose *bool
 )
 
-type list []string
-
-func (a *list) String() string {
-	return fmt.Sprintf("%v", *a)
-}
-func (a *list) Set(v string) error {
-	*a = append(*a, v)
-	return nil
-}
-
 func main() {
-	var peerAddrs list
-	l := flag.String("l", "", "local address")
-	flag.Var(&peerAddrs, "p", "peer address")
-	rc := flag.Uint("r", 0, "routing context")
-	ppc := flag.Uint("c", 0, "peer point code")
-	lpc := flag.Uint("d", 0, "local point code")
-	ni := flag.Uint("i", 0, "network indicator")
-	na := flag.Int("n", -1, "network appearance")
-	gt := flag.String("g", "", "global title address")
-	ssn := flag.String("s", "", "subsystem number msc|hlr|vlr")
-	api := flag.String("a", ":8080", "local API port")
-	be := flag.String("b", "localhost:80", "backend API port")
-	to := flag.Int("t", int(tcap.Tw/time.Second), "Message timeout timer [s]")
-	verbose = flag.Bool("v", false, "Verbose log output")
-	flag.Parse()
-
 	log.Println("[INFO]", "booting Round-Robin debugger for MAP...")
 
-	la, e := xua.ParseSCTPAddr(*l)
-	if e != nil {
-		log.Fatalln("[ERROR]", "invalid local address:", e)
-	}
-	pa := make([]*xua.SCTPAddr, 0, len(peerAddrs))
-	for _, a := range peerAddrs {
-		p, e := xua.ParseSCTPAddr(a)
-		if e != nil {
-			log.Fatalln("[ERROR]", "invalid peer address:", e)
+	if v := os.Getenv("VERBOSE"); v != "yes" {
+		if v != "no" {
+			log.Println("[INFO]", "parameter VERBOSE is empty or invalid, set to default")
 		}
-		pa = append(pa, p)
+		xua.TraceEvent = func(old, new, event string, err error) {
+			if err != nil {
+				log.Printf("[INFO] event %s handling failed: %v", event, err)
+			}
+		}
+		tcap.TraceMessage = func(m tcap.Message, d tcap.Direction, e error) {
+			count(m, d)
+		}
+		traceDalog = func(d tcap.Direction, n, v string) {}
 	}
 
-	if *lpc == 0 || *ppc == 0 {
-		log.Fatalln("[ERROR]", "point code is not specified")
+	if to := os.Getenv("TIMEOUT"); to == "" {
+	} else if t, e := strconv.Atoi(to); e != nil {
+		log.Printf("[INFO] parameter TIMEOUT is invalid, set to default %fs",
+			tcap.Tw.Seconds())
+	} else {
+		tcap.Tw = time.Second * time.Duration(t)
 	}
-	if *rc == 0 {
-		log.Fatalln("[ERROR]", "routing context is not specified")
+
+	la, e := xua.ParseSCTPAddr(os.Getenv("LOCAL_ADDR"))
+	if e != nil {
+		log.Fatalln("[ERROR]", "invalid local address:", e)
 	}
 
 	tcap.EndPoint, e = xua.NewSignalingEndpoint(la)
 	if e != nil {
 		log.Fatalln("[ERROR]", "failed to bind:", e)
 	}
-	tcap.EndPoint.ReturnOnError = true
-	if *ni > 0 && *ni < 4 {
-		tcap.EndPoint.NetIndicator = uint8(*ni)
+	if i, e := strconv.Atoi(os.Getenv("LOCAL_POINT_CODE")); e != nil {
+		log.Fatalln("[ERROR]", "invalid local point code")
+	} else {
+		tcap.EndPoint.LocalPointCode = uint32(i)
 	}
-	if *na >= 0 {
-		tmp := uint32(*na)
-		tcap.EndPoint.NetAppearance = &tmp
+	if i, e := strconv.Atoi(os.Getenv("GATEWAY_POINT_CODE")); e != nil {
+		log.Fatalln("[ERROR]", "invalid gateway point code")
+	} else {
+		tcap.EndPoint.GwPointCode = uint32(i)
+	}
+	if i, e := strconv.Atoi(os.Getenv("ROUTING_CONTEXT")); e != nil {
+		tcap.EndPoint.Context = 0
+	} else {
+		tcap.EndPoint.Context = uint32(i)
+	}
+	switch os.Getenv("NETWORK_INDICATOR") {
+	case "international":
+		tcap.EndPoint.NetIndicator = 0
+	case "spare":
+		tcap.EndPoint.NetIndicator = 1
+	case "national":
+		tcap.EndPoint.NetIndicator = 2
+	case "reserved":
+		tcap.EndPoint.NetIndicator = 3
+	default:
+		tcap.EndPoint.NetIndicator = 0
+	}
+	if i, e := strconv.Atoi(os.Getenv("NETWORK_APPEARANCE")); e != nil {
+		tcap.EndPoint.NetAppearance = 0
+	} else {
+		tcap.EndPoint.NetAppearance = uint32(i)
 	}
 	tcap.EndPoint.PayloadHandler = tcap.HandlePayload
 
-	tcap.EndPoint.GlobalTitle.NatureOfAddress = teldata.International
-	tcap.EndPoint.GlobalTitle.NumberingPlan = teldata.ISDNTelephony
-	if tcap.EndPoint.GlobalTitle.Digits, e = teldata.ParseTBCD(*gt); e != nil {
+	tcap.LocalGT.GlobalTitle.NatureOfAddress = teldata.International
+	tcap.LocalGT.GlobalTitle.NumberingPlan = teldata.ISDNTelephony
+	if tcap.LocalGT.GlobalTitle.Digits, e = teldata.ParseTBCD(os.Getenv("GLOBAL_TITLE")); e != nil {
 		log.Fatalln("[ERROR]", "invalid global title address:", e)
 	}
-	switch *ssn {
+	switch os.Getenv("SUBSYSTEM_NUMBER") {
 	case "msc":
-		tcap.EndPoint.SubsystemNumber = teldata.SsnMSC
+		tcap.LocalGT.SubsystemNumber = teldata.SsnMSC
 	case "hlr":
-		tcap.EndPoint.SubsystemNumber = teldata.SsnHLR
+		tcap.LocalGT.SubsystemNumber = teldata.SsnHLR
 	case "vlr":
-		tcap.EndPoint.SubsystemNumber = teldata.SsnVLR
-	case "":
+		tcap.LocalGT.SubsystemNumber = teldata.SsnVLR
 	default:
-		log.Fatalln("[ERROR]", "invalid subsystem number")
+		tcap.LocalGT.SubsystemNumber = teldata.SsnMSC
 	}
 
-	tcap.EndPoint.PointCode = uint32(*lpc)
-	tcap.EndPoint.Context = uint32(*rc)
-	tcap.PeerPointCode = uint32(*ppc)
+	log.Printf("[INFO] ASP local information"+
+		"\n | address:                     %s"+
+		"\n | point code(routing context): %d(%d)"+
+		"\n | network indicator:           %d"+
+		"\n | network appearance:          %d"+
+		"\n | global title/ssn:            %s / %s",
+		la,
+		tcap.EndPoint.LocalPointCode, tcap.EndPoint.Context,
+		tcap.EndPoint.NetIndicator,
+		tcap.EndPoint.NetAppearance,
+		tcap.LocalGT.GlobalTitle, tcap.LocalGT.SubsystemNumber)
 
-	tcap.Tw = time.Duration(*to) * time.Second
+	pa := make([]*xua.SCTPAddr, 0)
+	for i := range 10 {
+		if a := os.Getenv(fmt.Sprintf("PEER_ADDR%d", i)); a == "" {
+			continue
+		} else if p, e := xua.ParseSCTPAddr(a); e != nil {
+			log.Fatalln("[ERROR]", "invalid peer identity of", a, ":", e)
+		} else {
+			pa = append(pa, p)
+		}
+	}
 
-	backend = "http://" + *be
-	_, e = url.Parse(backend)
-	if e != nil || len(*be) == 0 {
-		log.Println("[ERROR]", "invalid HTTP backend host, MAP request will be rejected")
+	backend = "http://" + os.Getenv("BACKENDAPI_ADDR")
+	if u, e := url.Parse(backend); e != nil || u.Host == "" {
+		log.Println("[WARN]", "invalid HTTP backend host, Rx request will be rejected")
 		backend = ""
 	} else {
 		log.Println("[INFO]", "HTTP backend is", backend)
@@ -130,10 +150,6 @@ func main() {
 		tcap.NewInvoke = handleIncomingDialog
 	}
 
-	if !*verbose {
-		tcap.TraceMessage = nil
-	}
-
 	tcap.DialogueHandler = func(q tcap.AARQ) tcap.Dialogue {
 		n, v := getContextName(q.Context)
 		if n != "" && v != "" {
@@ -146,31 +162,39 @@ func main() {
 		return &tcap.ABRT{Source: tcap.SvcUser}
 	}
 
-	/*
-		for k := range gsmap.NameMap {
-			log.Println("[INFO]", "available component", k)
-		}
-	*/
-
 	http.HandleFunc("POST /mapmsg/v1/{ac}/{ver}", handleOutgoingDialog)
 	http.HandleFunc("POST /dialog/{id}", handleContinueDialog)
 	http.HandleFunc("DELETE /dialog/{id}", handleContinueDialog)
 	http.HandleFunc("GET /mapstate/v1/connection", conStateHandler)
 	http.HandleFunc("GET /mapstate/v1/statistics", statsHandler)
+
+	frontend := os.Getenv("LOCALAPI_ADDR")
+	log.Println("[INFO]", "listening HTTP...\n | local port:", frontend)
 	go func() {
-		log.Fatalln(http.ListenAndServe(*api, nil))
+		err := http.ListenAndServe(frontend, nil)
+		if err != nil {
+			log.Println("[WARN]", "failed to listen HTTP, Tx request is not available:", err)
+		}
 	}()
 
-	log.Println("[INFO]", "Connecting ASP")
+	log.Println("[INFO]", "Connecting ASP...")
 	for _, a := range pa {
-		if e = tcap.EndPoint.ConnectTo(a); e != nil {
-			log.Fatalln("ERROR", "failed to connect ASP:", e)
+		if a == nil || len(a.IP) == 0 {
+			log.Fatalln("ERROR", "invalid peer address")
+		} else if a.IP[0].To4() == nil {
+			log.Fatalln("ERROR", "invalid peer address")
 		}
+		go tcap.EndPoint.ConnectTo(a)
 	}
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sigc
+	log.Println("[INFO]", "interrupted, closing connections")
+	time.AfterFunc(time.Second*30, func() {
+		log.Fatalln("[ERROR]", "closing timeout, forcefully stopped")
+	})
 	tcap.EndPoint.Close()
+	log.Println("[INFO]", "server stopped")
 }
 
 func readFromJSON(d []byte, defaultID int8) (cdpa xua.SCCPAddr, cgpa *xua.SCCPAddr, cpnt []gsmap.Component, e error) {

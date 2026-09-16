@@ -1,11 +1,12 @@
-# roundrobin
+# Round-Robin MAP debugger
 `roundrobin` is a component of the [gsmap](../README.md) project.
 It is an HTTP server for round-robin debugging of MAP (Mobile Application Protocol) messages.
-The server utilizes the MAP/TCAP/SUA/SCCP+M3UA/SCTP protocol stack and provides HTTP APIs to send, receive, and control MAP dialogs.
-
-`roundrobin` run as ASP in USA/M3UA and has onely one connection. MSU routing is roll of peer STP.
+The server utilizes the MAP/TCAP/SCCP+M3UA/SCTP protocol stack and provides HTTP APIs to send, receive, and control MAP dialogs.
 
 <img width="500" alt="Image" src="https://github.com/user-attachments/assets/73299f61-511b-45a7-9cb9-f0baf3b62005" />
+
+Round-Robin can connect to multiple peer node.
+But there is no routing function. Round-Robin select destination only by loadshare.
 
 ## Features
 - Control MAP message sending/receiving via HTTP API
@@ -20,36 +21,85 @@ cd roundrobin
 go build -o roundrobin
 ```
 
-## Usage Example
+# Usage
+No commandline options. Configuration parameters are indicated by environment variable.
+
 ```sh
-./roundrobin -l <local_addr> -p <peer_addr> -r <routing_context> -g <global_title> [options]
+roundrobin
 ```
 
-Example:
+Commandline example
+
 ```sh
-./roundrobin -l 10.255.201.18/10.255.202.18:14001 -p 10.255.201.66/10.255.202.66:14001 -r 101 -g 999900000001
+export LOCAL_ADDR=10.255.0.11/10.255.1.11:12905
+export LOCAL_POINT_CODE=2065
+export ROUTING_CONTEXT=1
+export NETWORK_INDICATOR=international
+export GLOBAL_TITLE=999900010001
+export SUBSYSTEM_NUMBER=msc
+export PEER_ADDR0=10.255.0.13/10.255.1.13
+export GATEWAY_POINT_CODE=2057
+export LOCALAPI_ADDR=:18080
+export BACKENDAPI_ADDR=localhost:18081
+export VERBOSE=yes
+roundrobin
 ```
 
-## Command Line Options
-| Option | Description |
-|---|---|
-| `-l` | Local SCTP address (e.g., 192.168.1.1:14000) |
-| `-p` | Peer SCTP address (e.g., 192.168.1.2:14001) |
-| `-r` | Routing Context (e.g., 101) |
-| `-g` | Global Title (e.g., 999900000001) |
-| `-c` | Peer Point Code |
-| `-d` | Local Point Code |
-| `-s` | Subsystem number (`msc`/`hlr`/`vlr`) |
-| `-a` | API server listen address (default: `:8080`) |
-| `-b` | Backend API host (default: `localhost:80`) |
-| `-t` | Message timeout (seconds) |
-| `-v` | Verbose logging |
+## Environment Variables
+- `LOCAL_ADDR`  
+Local SCTP address (e.g., 192.168.1.1:14000).
+When using multi-homed SCTP, multiple IP addresses are separated by `/`.
 
-If Peer Point Code is not defined, `roundrobin` use SUA.
-If Peer point Code is defined, `roundrobin` use M3UA.
+- `LOCAL_POINT_CODE`  
+Local Point Code.
 
-## HTTP API
-### Start Dialog
+- `ROUTING_CONTEXT`  
+Routing Context (e.g., 101).
+
+- `NETWORK_INDICATOR`  
+Network Indicator (`international`/`spare`/`national`/`reserved`).
+Default value is `international`.
+
+- `NETWORK_APPEARANCE`  
+Network Appearance digits.
+
+- `GLOBAL_TITLE`  
+Global Title (e.g., 999900000001).
+
+- `SUBSYSTEM_NUMBER`  
+Subsystem number (`msc`/`hlr`/`vlr`).
+Default value is `msc`.
+
+- `PEER_ADDR0` - `PEER_ADDR9`  
+Multiple (max 10) SCTP peer address definition.
+When using multi-homed SCTP, multiple IP addresses are separated by `/`.
+Round-Robin connect to specified peers and activate ASP.
+
+- `GATEWAY_POINT_CODE`  
+Peer Point Code digits.
+
+- `TIMEOUT`  
+Message timeout (seconds).
+
+- `LOCALAPI_ADDR`  
+Local listening address and port for receiving HTTP REST request.
+Value must have format `host[:port]`.
+`host` is hostname or IP address.
+IP address is resolved from hostname if hostname is specified.
+`port` is port number.
+
+- `BACKENDAPI_ADDR`  
+Peer address and port for sending HTTP REST request.
+Value must have format `host[:port]`.
+`host` is hostname or IP address.
+IP address is resolved from hostname if hostname is specified.
+`port` is port number.
+
+- `VERBOSE`  
+Verbose log mode. Message trace log is logged.
+
+# HTTP API
+## Start Dialog
 ```
 POST /mapmsg/v1/{context}/{version}
 Content-Type: application/json
@@ -60,17 +110,17 @@ Content-Type: application/json
 }
 ```
 
-### Continue/End Dialog
+## Continue/End Dialog
 ```
 POST /dialog/{id}
 DELETE /dialog/{id}
 ```
 
-### Get Status
+## Get Status
 ```
 GET /mapstate/v1/connection
 GET /mapstate/v1/statistics
 ```
 
-## License
+# License
 MIT

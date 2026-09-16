@@ -12,27 +12,6 @@ TM: RTransfer Messages
 Message class = 0x01
 */
 
-type Cause uint32
-
-const (
-	Success                               Cause = 0x0000
-	NoTranslationForAnAddressOfSuchNature Cause = 0x0100
-	NoTranslationForThisSpecificAddress   Cause = 0x0101
-	SubsystemCongestion                   Cause = 0x0102
-	SubsystemFailure                      Cause = 0x0103
-	UnequippedUser                        Cause = 0x0104
-	MtpFailure                            Cause = 0x0105
-	NetworkCongestion                     Cause = 0x0106
-	Unqualified                           Cause = 0x0107
-	ErrorInMessageTransport               Cause = 0x0108
-	ErrorInLocalProcessing                Cause = 0x0109
-	DestinationCannotPerformReassembly    Cause = 0x010a
-	SccpFailure                           Cause = 0x010b
-	HopCounterViolation                   Cause = 0x010c
-	SegmentationNotSupported              Cause = 0x010d
-	SegmentationFailure                   Cause = 0x010e
-)
-
 /*
 DATA is Payload Data message. (Message type = 0x01)
 
@@ -45,7 +24,7 @@ DATA is Payload Data message. (Message type = 0x01)
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 	|        Tag = 0x0006           |          Length = 8           |
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-	|                      * Routing Context                        |
+	|                        Routing Context                        |
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 	|        Tag = 0x0210           |             Length            |
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
@@ -73,25 +52,9 @@ Protocol Data
 	/                     User Protocol Data                        /
 	\                                                               \
 	+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-
-Unitdata (UDT)
-
-	Message type code     F 1 octet
-	Protocol class        F 1 octet
-	Called party address  V 3- octets
-	Calling party address V 3- octets
-	Data                  V 2- octets
-
-Unitdata Service (UDTS)
-
-	Message type code     F 1 octet
-	Return cause          F 1 octet
-	Called party address  V 3- octets
-	Calling party address V 3- octets
-	Data                  V 2– octets
 */
 type DATA struct {
-	na  *uint32
+	na  uint32
 	ctx uint32
 
 	opc uint32
@@ -101,85 +64,59 @@ type DATA struct {
 	// mp uint8 = 0x00
 	sls uint8
 
-	// SCCP data
-	userData
+	data UnitData // SCCP data
 
 	// correlation *uint32
+	result chan error
 }
 
-type TxDATA DATA
-type RxDATA DATA
-
-func (m *TxDATA) handleMessage(c *ASP) {
-	c.TxTransfer++
-
-	cls, typ, b := m.marshal()
-	buf := new(bytes.Buffer)
-
-	// version
-	buf.WriteByte(1)
-	// reserved
-	buf.WriteByte(0)
-	// Message Class
-	buf.WriteByte(cls)
-	// Message Type
-	buf.WriteByte(typ)
-	// Message Length
-	binary.Write(buf, binary.BigEndian, uint32(len(b)+8))
-	// Message Data
-	buf.Write(b)
-
-	i, e := sctpSend(c.sock, buf.Bytes(), uint16(m.sls)+1)
-	if TxFailureNotify != nil {
-		if e != nil {
-			TxFailureNotify(e, buf.Bytes())
-		} else if i != len(buf.Bytes()) {
-			TxFailureNotify(fmt.Errorf("failed to send complete data"), buf.Bytes())
-		}
-	}
-}
-
-func (*TxDATA) handleResult(message) {}
-
-func (m *TxDATA) marshal() (uint8, uint8, []byte) {
-	buf := new(bytes.Buffer)
-
-	// Network Appearance (Optional)
-	if m.na != nil {
-		writeUint32(buf, 0x0200, *m.na)
-	}
-
-	// Routing Context
-	writeUint32(buf, 0x0006, m.ctx)
-
-	// Protocol Data
-	ud := new(bytes.Buffer)
-	if m.cause == Success {
-		ud.WriteByte(0x09)
-		if m.returnOnError {
-			ud.WriteByte((m.protocolClass & 0x0f) | 0x80)
-		} else {
-			ud.WriteByte(m.protocolClass & 0x0f)
-		}
+func (m *DATA) handle(c *ASP) (e error) {
+	if m.result != nil {
+		// handle Tx
+		e = c.send(m, uint16(m.sls)+1)
+		m.result <- e
 	} else {
-		ud.WriteByte(0x0a)
-		ud.WriteByte(byte(m.cause & 0x00ff))
+		// handle Rx
+		if m.data.Cause == Success {
+			// handle SCCP request
+			if c.handler != nil {
+				c.handler(m.data)
+			} else if m.data.ReturnOnError {
+				c.msgQ <- &DATA{
+					na:  m.na,
+					ctx: m.ctx,
+					opc: m.dpc,
+					dpc: m.opc,
+					ni:  m.ni,
+					sls: m.sls,
+					data: UnitData{
+						Cause: SubsystemFailure,
+						CgPA:  m.data.CdPA, CdPA: m.data.CgPA,
+						Data: m.data.Data}}
+			}
+		} else {
+			// handle SCCP answer
+			if TxFailureNotify != nil {
+				TxFailureNotify(
+					fmt.Errorf("error response(cause=%x) from peer", m.data.Cause),
+					m.data.Data)
+			}
+		}
 	}
+	return
+}
 
-	ud.WriteByte(3)
-	cdpa := m.cdpa.marshalSCCP()
-	ud.WriteByte(byte(3 + len(cdpa)))
-	cgpa := m.cgpa.marshalSCCP()
-	ud.WriteByte(byte(3 + len(cdpa) + len(cgpa)))
-
-	ud.WriteByte(byte(len(cdpa)))
-	ud.Write(cdpa)
-	ud.WriteByte(byte(len(cgpa)))
-	ud.Write(cgpa)
-	ud.WriteByte(byte(len(m.data)))
-	ud.Write(m.data)
-	l := ud.Len()
-
+func (m *DATA) marshal() (uint8, uint8, []byte) {
+	buf := new(bytes.Buffer)
+	if m.na != 0 { // Network Appearance (Optional)
+		writeUint32(buf, 0x0200, m.na)
+	}
+	if m.ctx != 0 { // Routing Context (Optional)
+		writeUint32(buf, 0x0006, m.ctx)
+	}
+	// Protocol Data
+	d := m.data.marshal()
+	l := len(d)
 	binary.Write(buf, binary.BigEndian, uint16(0x0210))
 	binary.Write(buf, binary.BigEndian, uint16(16+l))
 	binary.Write(buf, binary.BigEndian, m.opc)
@@ -188,120 +125,48 @@ func (m *TxDATA) marshal() (uint8, uint8, []byte) {
 	buf.WriteByte(m.ni)
 	buf.WriteByte(0x00)
 	buf.WriteByte(m.sls)
-	ud.WriteTo(buf)
+	buf.Write(d)
 	if l%4 != 0 {
 		buf.Write(make([]byte, 4-l%4))
 	}
-
-	// Correlation ID (Optional)
-	// if m.correlation != nil {
+	// if m.correlation != nil { // Correlation ID (Optional)
 	//	writeUint32(buf, 0x0013, *m.correlation)
 	// }
-
 	return 0x01, 0x01, buf.Bytes()
 }
 
-func (m *RxDATA) handleMessage(c *ASP) {
-	if m.cause == Success {
-		c.RxTransfer++
-		if c.handler != nil {
-			c.handler(m.cgpa, m.cdpa, m.data)
-			/*
-				} else if m.returnOnError {
-					c.msgQ <- &TxDATA{
-						ctx: m.ctx,
-						userData: userData{
-							cause: SubsystemFailure,
-							cgpa:  m.cdpa, cdpa: m.cgpa,
-							data: m.data}}
-			*/
-		}
-	} else {
-		if TxFailureNotify != nil {
-			TxFailureNotify(
-				fmt.Errorf("error response(cause=%x) from peer", m.cause), m.data)
-		}
-		c.RxResponse++
-	}
-}
-
-func (m *RxDATA) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
+func (m *DATA) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	switch t {
 	case 0x0200: // Network Appearance (Optional)
-		m.na = new(uint32)
-		*m.na, e = readUint32(r, l)
-	case 0x0006: // Routing Context
+		m.na, e = readUint32(r, l)
+	case 0x0006: // Routing Context (Optional)
 		m.ctx, e = readUint32(r, l)
 	case 0x0210: // Protocol Data
-		d := make([]byte, l)
-		if _, e = r.Read(d); e != nil {
+		d := make([]byte, 12)
+		if _, e = io.ReadFull(r, d); e != nil {
 			return
 		}
+		m.opc = uint32(d[0])<<24 | uint32(d[1])<<16 | uint32(d[2])<<8 | uint32(d[3])
+		m.dpc = uint32(d[4])<<24 | uint32(d[5])<<16 | uint32(d[6])<<8 | uint32(d[7])
+		m.ni = d[9]
+		m.sls = d[11]
 
-		buf := bytes.NewReader(d)
-		binary.Read(buf, binary.BigEndian, &m.opc)
-		binary.Read(buf, binary.BigEndian, &m.dpc)
-		buf.ReadByte()
-		if m.ni, e = buf.ReadByte(); e != nil {
-			return
-		}
-		buf.ReadByte()
-		if m.sls, e = buf.ReadByte(); e != nil {
-			return
-		}
-
-		var t byte
-		if t, e = buf.ReadByte(); e != nil {
-			return
-		}
-		switch t {
-		case 0x09:
-			t, e = buf.ReadByte()
-			m.returnOnError = t&0x80 == 0x80
-			m.protocolClass = t & 0x0f
-		case 0x0a:
-			t, e = buf.ReadByte()
-			m.cause = Cause(t) | 0x0100
-		default:
-			e = fmt.Errorf("unknown SCCP message type(%x)", t)
-			return
-		}
-		if e != nil {
-			return
-		}
-
-		pos := make([]byte, 3)
-		if _, e = buf.Read(pos); e != nil {
-			return
-		}
-		d = make([]byte, buf.Len())
-		buf.Read(d)
-		buf.Reset(d)
-
-		if _, e = buf.Seek(int64(pos[0]-3), io.SeekStart); e != nil {
-			return
-		}
-		if m.cdpa, e = readSCCPAddr(buf); e != nil {
-			return
-		}
-		if _, e = buf.Seek(int64(pos[1]-2), io.SeekStart); e != nil {
-			return
-		}
-		if m.cgpa, e = readSCCPAddr(buf); e != nil {
-			return
-		}
-		if _, e = buf.Seek(int64(pos[2]-1), io.SeekStart); e != nil {
-			return
-		}
-		if t, e = buf.ReadByte(); e != nil {
-			return
-		}
-		m.data = make([]byte, t)
-		if _, e = buf.Read(m.data); e != nil {
-			return
+		d = make([]byte, l-12)
+		if _, e = io.ReadFull(r, d); e == nil {
+			e = m.data.unmarshal(d)
 		}
 	default:
 		_, e = r.Seek(int64(l), io.SeekCurrent)
 	}
 	return
 }
+
+func (m *DATA) name() string {
+	if m.result != nil {
+		return "txDATA"
+	} else {
+		return "rxDATA"
+	}
+}
+
+func (*DATA) state() string { return "" }

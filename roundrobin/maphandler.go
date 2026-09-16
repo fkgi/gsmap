@@ -17,9 +17,7 @@ func handleIncomingDialog(t *tcap.Transaction, cp []gsmap.Component) (
 	[]gsmap.Component, gsmap.AppContext, tcap.ComponentHandler) {
 
 	n, v := getContextName(t.GetContext())
-	if *verbose {
-		log.Println("[INFO]", "Rx new dialog", n, v)
-	}
+	traceDalog(tcap.Rx, n, v)
 
 	var internalErr []gsmap.Component
 	if len(cp) == 0 {

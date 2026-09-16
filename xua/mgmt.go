@@ -1,6 +1,7 @@
 package xua
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 )
@@ -47,15 +48,32 @@ type ERR struct {
 	code ErrCode
 	ctx  uint32
 	apc  []PointCode
-	na   *uint32
+	na   uint32
 	// info []byte
 }
 
-func (m *ERR) handleMessage(c *ASP) {
-	if StateNotify != nil {
-		ErrorNotify(c.id, m.code)
+func (m *ERR) handle(c *ASP) (e error) {
+	if c.ctx != 0 && m.ctx != c.ctx {
+		e = fmt.Errorf("routing context missmatch")
 	}
-	c.handleCtrlAns(m)
+	return
+}
+
+func (m *ERR) marshal() (uint8, uint8, []byte) {
+	buf := new(bytes.Buffer)
+	// Error Code
+	writeUint32(buf, 0x000C, uint32(m.code))
+	if m.ctx != 0 { // Routing Context (Optional)
+		writeUint32(buf, 0x0006, m.ctx)
+	}
+	if len(m.apc) != 0 { // Affected Point Code (Optional)
+		writeAPC(buf, m.apc)
+	}
+	if m.na != 0 { // Network Appearance (Optional)
+		writeUint32(buf, 0x010D, m.na)
+	}
+	// Diagnostic Info (Optional)
+	return 0x00, 0x00, buf.Bytes()
 }
 
 func (m *ERR) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
@@ -69,7 +87,7 @@ func (m *ERR) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	case 0x0012: // Affected Point Code (Optional)
 		m.apc, e = readAPC(r, l)
 	case 0x010D: // Network Appearance (Optional)
-		*m.na, e = readUint32(r, l)
+		m.na, e = readUint32(r, l)
 	// case 0x0007:	// Diagnostic Info (Optional)
 	//	m.info = make([]byte, l)
 	//	_, e = r.Read(m.info)
@@ -81,6 +99,9 @@ func (m *ERR) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	}
 	return
 }
+
+func (m *ERR) name() string { return "rxERR" }
+func (*ERR) state() string  { return "" }
 
 type ErrCode uint32
 
@@ -184,52 +205,53 @@ type NTFY struct {
 	// id     *uint32
 	ctx uint32
 	// info    string
+	result chan error
 }
 
 type Status uint32
 
 const (
-	Down     Status = 0x00010001
-	Inactive Status = 0x00010002
-	Active   Status = 0x00010003
-	Pending  Status = 0x00010004
+	statusDwon     Status = 0x00010001
+	statusInactive Status = 0x00010002
+	statusActive   Status = 0x00010003
+	statusPending  Status = 0x00010004
 
-	InsufficientASPResourcesActive Status = 0x00020001
-	AlternateASPActive             Status = 0x00020002
-	ASPFialer                      Status = 0x00020003
+	insufficientASPResourcesActive Status = 0x00020001
+	alternateASPActive             Status = 0x00020002
+	aspFialer                      Status = 0x00020003
 )
 
-func (s Status) String() string {
-	switch s {
-	case Down:
-		return "down"
-	case Inactive:
-		return "inactive"
-	case Active:
-		return "active"
-	case Pending:
-		return "pending"
+func (m *NTFY) handle(c *ASP) (e error) {
+	if m.result != nil {
+		// handle Tx
+		m.ctx = c.ctx
+		e = c.send(m, 0)
+		m.result <- e
+	} else {
+		// handle Rx
+		if c.ctx != 0 && m.ctx != c.ctx {
+			e = c.send(&ERR{
+				code: InvalidRoutingContext, ctx: m.ctx}, 0)
+		} else {
+			c.eventQ <- m
+		}
 	}
-	return ""
+	return
 }
 
-func (m *NTFY) handleMessage(a *ASP) {
-	if a.state == m.status {
-		return
+func (m *NTFY) marshal() (uint8, uint8, []byte) {
+	buf := new(bytes.Buffer)
+	// Status
+	writeUint32(buf, 0x000D, uint32(m.status))
+	// ASP Identifier (Optional)
+	if m.ctx != 0 { // Routing Context (Optional)
+		writeUint32(buf, 0x0006, m.ctx)
 	}
-
-	if StateNotify != nil {
-		StateNotify(a.id, m.status)
-	}
-	switch m.status {
-	case Down, Inactive, Active, Pending:
-		a.state = m.status
-		a.statNotif <- m.status
-	}
+	// Info String (Optional)
+	return 0x00, 0x01, buf.Bytes()
 }
 
 func (m *NTFY) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
-	//	b []byte) (e error) {
 	switch t {
 	case 0x000D: // Status
 		var tmp uint32
@@ -246,6 +268,9 @@ func (m *NTFY) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	}
 	return
 }
+
+func (m *NTFY) name() string { return "rxNTFY" }
+func (*NTFY) state() string  { return "" }
 
 // 0x02 TEI Status Request
 // 0x03 TEI Status Confirm

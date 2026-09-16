@@ -126,20 +126,24 @@ func (*SCTPAddr) Network() string { return "sctp" }
 
 func ParseSCTPAddr(s string) (a *SCTPAddr, e error) {
 	a = &SCTPAddr{}
-	if part := strings.Split(s, ":"); len(part) != 2 {
+	part := strings.Split(s, ":")
+	if len(part) == 1 {
+		part = append(part, "2905")
+	} else if len(part) != 2 {
 		e = errors.New("invalid address")
-	} else if a.Port, e = strconv.Atoi(part[1]); e != nil {
+	}
+
+	if a.Port, e = strconv.Atoi(part[1]); e != nil {
 	} else if a.Port < 0 || a.Port > 65535 {
 		e = errors.New("invalid port number")
 	} else {
-		part = strings.Split(part[0], "/")
-		for _, ip := range part {
-			i := net.ParseIP(ip)
-			if i == nil {
+		for _, ip := range strings.Split(part[0], "/") {
+			if i := net.ParseIP(ip); i == nil {
 				e = errors.New("invalid IP address")
 				break
+			} else {
+				a.IP = append(a.IP, i)
 			}
-			a.IP = append(a.IP, i)
 		}
 	}
 	return
