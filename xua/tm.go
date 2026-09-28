@@ -79,8 +79,8 @@ func (m *DATA) handle(c *ASP) (e error) {
 		// handle Rx
 		if m.data.Cause == Success {
 			// handle SCCP request
-			if c.handler != nil {
-				c.handler(m.data)
+			if PayloadHandler != nil {
+				PayloadHandler(m.data)
 			} else if m.data.ReturnOnError {
 				c.msgQ <- &DATA{
 					na:  m.na,

@@ -24,7 +24,7 @@ var NewInvoke = func(*Transaction, []gsmap.Component) ([]gsmap.Component, gsmap.
 	return []gsmap.Component{}, 0, nil
 }
 
-var EndPoint *xua.SignalingEndpoint
+var EndPoint *xua.SignalingPoint
 var LocalGT xua.SCCPAddr
 
 func HandlePayload(ud xua.UnitData) {

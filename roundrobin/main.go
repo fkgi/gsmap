@@ -54,7 +54,22 @@ func main() {
 		log.Fatalln("[ERROR]", "invalid local address:", e)
 	}
 
-	tcap.EndPoint, e = xua.NewSignalingEndpoint(la)
+	pa := make([]*xua.SCTPAddr, 0)
+	for i := range 10 {
+		if a := os.Getenv(fmt.Sprintf("PEER_ADDR%d", i)); a == "" {
+			continue
+		} else if p, e := xua.ParseSCTPAddr(a); e != nil {
+			log.Fatalln("[ERROR]", "invalid peer identity of", a, ":", e)
+		} else {
+			pa = append(pa, p)
+		}
+	}
+
+	if len(pa) == 0 {
+		tcap.EndPoint, e = xua.NewSignalingTransferPoint(la)
+	} else {
+		tcap.EndPoint, e = xua.NewSignalingEndPoint(la)
+	}
 	if e != nil {
 		log.Fatalln("[ERROR]", "failed to bind:", e)
 	}
@@ -90,7 +105,7 @@ func main() {
 	} else {
 		tcap.EndPoint.NetAppearance = uint32(i)
 	}
-	tcap.EndPoint.PayloadHandler = tcap.HandlePayload
+	xua.PayloadHandler = tcap.HandlePayload
 
 	tcap.LocalGT.GlobalTitle.NatureOfAddress = teldata.International
 	tcap.LocalGT.GlobalTitle.NumberingPlan = teldata.ISDNTelephony
@@ -119,17 +134,6 @@ func main() {
 		tcap.EndPoint.NetIndicator,
 		tcap.EndPoint.NetAppearance,
 		tcap.LocalGT.GlobalTitle, tcap.LocalGT.SubsystemNumber)
-
-	pa := make([]*xua.SCTPAddr, 0)
-	for i := range 10 {
-		if a := os.Getenv(fmt.Sprintf("PEER_ADDR%d", i)); a == "" {
-			continue
-		} else if p, e := xua.ParseSCTPAddr(a); e != nil {
-			log.Fatalln("[ERROR]", "invalid peer identity of", a, ":", e)
-		} else {
-			pa = append(pa, p)
-		}
-	}
 
 	backend = "http://" + os.Getenv("BACKENDAPI_ADDR")
 	if u, e := url.Parse(backend); e != nil || u.Host == "" {
@@ -178,13 +182,20 @@ func main() {
 	}()
 
 	log.Println("[INFO]", "Connecting ASP...")
-	for _, a := range pa {
-		if a == nil || len(a.IP) == 0 {
-			log.Fatalln("ERROR", "invalid peer address")
-		} else if a.IP[0].To4() == nil {
-			log.Fatalln("ERROR", "invalid peer address")
+	if len(pa) == 0 {
+		go func() {
+			e := tcap.EndPoint.ListenAndServe()
+			log.Println("[WARN]", "transport listener closed:", e)
+		}()
+	} else {
+		for _, a := range pa {
+			if a == nil || len(a.IP) == 0 {
+				log.Fatalln("[ERROR]", "invalid peer address")
+			} else if a.IP[0].To4() == nil {
+				log.Fatalln("[ERROR]", "invalid peer address")
+			}
+			go tcap.EndPoint.ConnectTo(a)
 		}
-		go tcap.EndPoint.ConnectTo(a)
 	}
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)

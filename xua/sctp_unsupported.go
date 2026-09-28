@@ -4,17 +4,19 @@ package xua
 
 import "unsafe"
 
-func sockOpen() (int, error) {
+func sockSeqpacketOpen() (int, error) {
+	return 0, nil
+}
+
+func sockStreamOpen() (int, error) {
 	return 0, nil
 }
 
 func sockClose(int) {}
 
-/*
 func sockListen(int) error {
 	return nil
 }
-*/
 
 func sctpBindx(int, []byte) error {
 	return nil
@@ -24,11 +26,9 @@ func sctpConnectx(int, []byte) (int, error) {
 	return 0, nil
 }
 
-/*
 func sctpAccept(int) (int, error) {
 	return 0, nil
 }
-*/
 
 func sctpSend(int, []byte, uint16) (int, error) {
 	return 0, nil

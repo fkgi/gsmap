@@ -101,6 +101,7 @@ func (m *ASPAC) handle(c *ASP) (e error) {
 				e = c.send(&ERR{
 					code: UnsupportedTrafficHandlingMode, ctx: m.ctx}, 0)
 			} else {
+				c.ctx = m.ctx
 				c.state = &active{}
 				ack := &ASPACAck{ctx: c.ctx}
 				if m.mode == 0 {

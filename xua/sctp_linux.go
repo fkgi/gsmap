@@ -17,16 +17,38 @@ func sockSeqpacketOpen() (int, error) {
 		syscall.IPPROTO_SCTP)
 }
 
+func sockStreamOpen() (int, error) {
+	return syscall.Socket(
+		syscall.AF_INET,
+		syscall.SOCK_STREAM|syscall.SOCK_CLOEXEC,
+		syscall.IPPROTO_SCTP)
+}
+
 func sockClose(fd int) {
 	syscall.Shutdown(fd, syscall.SHUT_RDWR)
 	syscall.Close(fd)
 }
 
-/*
-func sockListen(fd int) error {
-	return syscall.Listen(fd, syscall.SOMAXCONN)
+func sockListen(fd int) (e error) {
+	if e = syscall.Listen(fd, syscall.SOMAXCONN); e != nil {
+		/*
+			} else if e = syscall.SetNonblock(fd, true); e != nil {
+			} else if e = syscall.EpollCtl(
+				epfd,
+				syscall.EPOLL_CTL_ADD,
+				l.sock,
+				eventIN(l.sock)); e != nil {
+			} else {
+				l.rPoll = make(chan any, 16)
+				l.cPoll = make(chan any, 1)
+				cs := <-cmap
+				cs[int32(l.sock)] = &SCTPConn{
+					sock: l.sock, rPoll: l.rPoll, wPoll: make(chan any, 16)}
+				cmap <- cs
+		*/
+	}
+	return
 }
-*/
 
 func sctpBindx(fd int, addr []byte) error {
 	if _, _, e := syscall.Syscall6(
@@ -90,12 +112,10 @@ func sctpConnectx(fd int, addr []byte) (int, error) {
 	return int(peel.sd), nil
 }
 
-/*
-	func sctpAccept(fd int) (nfd int, e error) {
-		nfd, _, e = syscall.Accept(fd)
-		return
-	}
-*/
+func sctpAccept(fd int) (nfd int, e error) {
+	nfd, _, e = syscall.Accept(fd)
+	return
+}
 
 func sctpSend(fd int, b []byte, sid uint16) (n int, e error) {
 	hdr := syscall.Cmsghdr{

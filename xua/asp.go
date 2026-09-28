@@ -20,12 +20,11 @@ var (
 )
 
 type ASP struct {
-	sock    int
-	ctx     uint32
-	msgQ    chan message
-	eventQ  chan message
-	handler func(UnitData)
-	state   message
+	sock   int
+	ctx    uint32
+	msgQ   chan message
+	eventQ chan message
+	state  message
 }
 
 func (c *ASP) State() string {
@@ -65,59 +64,10 @@ func (c *ASP) RemoteAddr() net.Addr {
 	}
 }
 
-func (c *ASP) connectAndServe(sharedQ chan UnitData) {
+func (c *ASP) connectAndServe(se *SignalingPoint) {
 	c.msgQ = make(chan message, 1024)
 	c.state = &down{}
-
-	go func() { // rx data procedure
-		for {
-			data, e := sctpRecvmsg(c.sock)
-			if eno, ok := e.(*syscall.Errno); ok && eno.Temporary() {
-				continue
-			} else if e != nil {
-				break
-			} else if data[0] != 1 || len(data) < 8 {
-				if RxFailureNotify != nil {
-					RxFailureNotify(fmt.Errorf("invalid lengh of data"), data)
-				}
-				continue
-			}
-
-			m := getMessage(data[2], data[3])
-			if m == nil {
-				if RxFailureNotify != nil {
-					RxFailureNotify(fmt.Errorf("unknown message: %x-%x", data[2], data[3]), data)
-				}
-				continue
-			}
-
-			for r := bytes.NewReader(data[8 : uint32(data[4])<<24|uint32(data[5])<<16|uint32(data[6])<<8|uint32(data[7])]); r.Len() > 4; {
-				var t, l uint16
-				binary.Read(r, binary.BigEndian, &t)
-				binary.Read(r, binary.BigEndian, &l)
-				l -= 4
-
-				if e := m.unmarshal(t, l, r); e != nil {
-					if RxFailureNotify != nil {
-						RxFailureNotify(fmt.Errorf("invalid data for tag %x: %v", t, e), data)
-					}
-				}
-				if l%4 != 0 {
-					r.Seek(int64(4-l%4), io.SeekCurrent)
-				}
-			}
-
-			if msg, ok := m.(*DATA); ok && msg.data.Cause == Success && msg.data.ProtocolClass == 0 {
-				sharedQ <- msg.data
-			} else {
-				c.msgQ <- m
-			}
-		}
-		if _, ok := c.state.(*down); !ok {
-			c.msgQ <- &down{}
-		}
-	}()
-
+	go c.recieve(se)
 	go func() {
 		// ASP up
 		r := make(chan error, 1)
@@ -137,6 +87,94 @@ func (c *ASP) connectAndServe(sharedQ chan UnitData) {
 		if _, ok := m.(*down); ok {
 			break
 		}
+	}
+}
+
+func (c *ASP) acceptAndServe(se *SignalingPoint) {
+	c.msgQ = make(chan message, 1024)
+	c.state = &down{}
+	go c.recieve(se)
+
+	// event procedure
+	for m, ok := <-c.msgQ; ok; m, ok = <-c.msgQ {
+		old := c.state
+		e := m.handle(c)
+		if TraceEvent != nil {
+			TraceEvent(old.state(), c.state.state(), m.name(), e)
+		}
+		if _, ok := m.(*down); ok {
+			break
+		}
+	}
+}
+
+func (c *ASP) recieve(se *SignalingPoint) {
+	for {
+		data, e := sctpRecvmsg(c.sock)
+		if eno, ok := e.(*syscall.Errno); ok && eno.Temporary() {
+			continue
+		} else if e != nil {
+			break
+		} else if data[0] != 1 || len(data) < 8 {
+			if RxFailureNotify != nil {
+				RxFailureNotify(fmt.Errorf("invalid lengh of data"), data)
+			}
+			continue
+		}
+
+		m := getMessage(data[2], data[3])
+		if m == nil {
+			if RxFailureNotify != nil {
+				RxFailureNotify(fmt.Errorf("unknown message: %x-%x", data[2], data[3]), data)
+			}
+			continue
+		}
+
+		for r := bytes.NewReader(data[8 : uint32(data[4])<<24|uint32(data[5])<<16|uint32(data[6])<<8|uint32(data[7])]); r.Len() > 4; {
+			var t, l uint16
+			binary.Read(r, binary.BigEndian, &t)
+			binary.Read(r, binary.BigEndian, &l)
+			l -= 4
+
+			if e := m.unmarshal(t, l, r); e != nil {
+				if RxFailureNotify != nil {
+					RxFailureNotify(fmt.Errorf("invalid data for tag %x: %v", t, e), data)
+				}
+			}
+			if l%4 != 0 {
+				r.Seek(int64(4-l%4), io.SeekCurrent)
+			}
+		}
+
+		if msg, ok := m.(*DATA); ok && msg.data.Cause == Success {
+			if PayloadHandler == nil {
+				if msg.data.ReturnOnError {
+					seq := <-se.sequence
+					se.sequence <- seq + 1
+					c.msgQ <- &DATA{
+						na:  se.NetAppearance,
+						ctx: c.ctx,
+						opc: se.LocalPointCode,
+						dpc: se.GwPointCode,
+						ni:  se.NetIndicator,
+						sls: seq & SLSMask,
+						data: UnitData{
+							Cause: SubsystemFailure,
+							CgPA:  msg.data.CdPA, CdPA: msg.data.CgPA,
+							Data: msg.data.Data},
+						result: make(chan error, 1)}
+				}
+				continue
+			} else if msg.data.ProtocolClass == 0 {
+				sharedQ <- msg.data
+				workerCheck()
+				continue
+			}
+		}
+		c.msgQ <- m
+	}
+	if _, ok := c.state.(*down); !ok {
+		c.msgQ <- &down{}
 	}
 }
 
