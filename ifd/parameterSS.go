@@ -484,7 +484,8 @@ func (f *forwFeature) unmarshal(data []byte) error {
 		return e
 	}
 
-	if t == 0x82 {
+	switch t {
+	case 0x82:
 		// basicService ext-BearerService, context_specific(80) + primitive(00) + 2(02)
 		if len(v) == 0 {
 			return gsmap.UnexpectedTLV("length must >0")
@@ -497,7 +498,7 @@ func (f *forwFeature) unmarshal(data []byte) error {
 		} else if e != nil {
 			return e
 		}
-	} else if t == 0x83 {
+	case 0x83:
 		// basicService ext-Teleservice, context_specific(80) + primitive(00) + 3(03)
 		if len(v) == 0 {
 			return gsmap.UnexpectedTLV("length must >0")
@@ -704,7 +705,8 @@ func (f *callBarFeature) unmarshal(data []byte) error {
 		return e
 	}
 
-	if t == 0x82 {
+	switch t {
+	case 0x82:
 		// basicService ext-BearerService, context_specific(80) + primitive(00) + 2(02)
 		if len(v) == 0 {
 			return gsmap.UnexpectedTLV("length must >0")
@@ -717,7 +719,7 @@ func (f *callBarFeature) unmarshal(data []byte) error {
 		} else if e != nil {
 			return e
 		}
-	} else if t == 0x83 {
+	case 0x83:
 		// basicService ext-Teleservice, context_specific(80) + primitive(00) + 3(03)
 		if len(v) == 0 {
 			return gsmap.UnexpectedTLV("length must >0")
@@ -978,14 +980,15 @@ func (i *ssData) unmarshal(data []byte) error {
 				return e
 			}
 
-			if t2 == 0x82 {
+			switch t2 {
+			case 0x82:
 				// basicService ext-BearerService, context_specific(80) + primitive(00) + 2(02)
 				if len(v2) == 0 {
 					return gsmap.UnexpectedTLV("length must >0")
 				}
 				i.BasicServiceList = append(i.BasicServiceList,
 					svcCode{Type: 2, Code: v2[0]})
-			} else if t2 == 0x83 {
+			case 0x83:
 				// basicService ext-Teleservice, context_specific(80) + primitive(00) + 3(03)
 				if len(v2) == 0 {
 					return gsmap.UnexpectedTLV("length must >0")

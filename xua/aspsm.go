@@ -64,6 +64,12 @@ func (m *ASPUP) handle(c *ASP) (e error) {
 			c.state = &inactive{}
 			if e = c.send(&ASPUPAck{}, 0); e != nil {
 				c.state = r
+			} else {
+				go func() {
+					r := make(chan error)
+					c.msgQ <- &NTFY{status: statusInactive, result: r}
+					<-r
+				}()
 			}
 		case *inactive, *active, *closing, *ASPAC, *ASPIA, *ASPDN:
 			e = c.send(&ASPUPAck{}, 0)
@@ -159,7 +165,9 @@ func (m *ASPDN) handle(c *ASP) (e error) {
 				c.state = r
 			} else {
 				time.AfterFunc(time.Millisecond*100, func() {
-					c.msgQ <- &down{}
+					if c.state.name() != "down" {
+						c.msgQ <- &down{}
+					}
 				})
 			}
 		default:

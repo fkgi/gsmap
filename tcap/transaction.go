@@ -115,8 +115,8 @@ func (t *Transaction) Reject() {
 }
 
 func (t *Transaction) Discard() {
-	if TraceMessage != nil {
-		TraceMessage(&TcAbort{dtid: t.dtid, pCause: TcDiscard}, Tx, nil)
+	if TraceTxMessage != nil {
+		TraceTxMessage(&TcAbort{dtid: t.dtid, pCause: TcDiscard}, nil)
 	}
 	t.deregister()
 }

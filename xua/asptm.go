@@ -109,6 +109,12 @@ func (m *ASPAC) handle(c *ASP) (e error) {
 				}
 				if e = c.send(ack, 0); e != nil {
 					c.state = r
+				} else {
+					go func() {
+						r := make(chan error)
+						c.msgQ <- &NTFY{status: statusActive, result: r}
+						<-r
+					}()
 				}
 			}
 		case *down, *ASPUP:

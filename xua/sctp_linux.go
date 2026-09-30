@@ -30,6 +30,23 @@ func sockClose(fd int) {
 }
 
 func sockListen(fd int) (e error) {
+	opt := struct {
+		numOstreams  uint16
+		maxIstreams  uint16
+		maxAttemts   uint16
+		maxInitTimeo uint16
+	}{numOstreams: 17}
+	if _, _, e := syscall.Syscall6(
+		syscall.SYS_SETSOCKOPT,
+		uintptr(fd),
+		syscall.IPPROTO_SCTP,
+		2, // SCTP_INITMSG
+		uintptr(unsafe.Pointer(&opt)),
+		unsafe.Sizeof(opt),
+		0); e != 0 {
+		return e
+	}
+
 	if e = syscall.Listen(fd, syscall.SOMAXCONN); e != nil {
 		/*
 			} else if e = syscall.SetNonblock(fd, true); e != nil {

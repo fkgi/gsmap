@@ -13,9 +13,12 @@ const (
 	cooltime   = time.Second * 5
 )
 
-var sharedQ = make(chan UnitData, maxWorkers)
-var activeWorkers = make(chan int, 1)
-var PayloadHandler func(UnitData) = nil
+var (
+	sharedQ       = make(chan UnitData, maxWorkers)
+	activeWorkers = make(chan int, 1)
+
+	PayloadHandler func(UnitData) = nil
+)
 
 func init() {
 	activeWorkers <- 0
@@ -242,6 +245,29 @@ func (se *SignalingPoint) ListenAndServe() error {
 			return e
 		}
 		f(s)
+	}
+}
+
+func (se *SignalingPoint) ListASPs() []*ASP {
+	res := []*ASP{}
+	asps := <-se.asps
+	se.asps <- asps
+	for _, a := range asps {
+		res = append(res, a)
+	}
+	return res
+}
+
+func (se *SignalingPoint) State() string {
+	switch se.state {
+	case statusInactive:
+		return "inactive"
+	case statusActive:
+		return "active"
+	case statusPending:
+		return "pending"
+	default:
+		return "down"
 	}
 }
 

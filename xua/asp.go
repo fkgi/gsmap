@@ -82,7 +82,14 @@ func (c *ASP) connectAndServe(se *SignalingPoint) {
 		old := c.state
 		e := m.handle(c)
 		if TraceEvent != nil {
-			TraceEvent(old.state(), c.state.state(), m.name(), e)
+			switch m.(type) {
+			case *DATA:
+				if e != nil {
+					TraceEvent(old.state(), c.state.state(), m.name(), e)
+				}
+			default:
+				TraceEvent(old.state(), c.state.state(), m.name(), e)
+			}
 		}
 		if _, ok := m.(*down); ok {
 			break
@@ -100,7 +107,14 @@ func (c *ASP) acceptAndServe(se *SignalingPoint) {
 		old := c.state
 		e := m.handle(c)
 		if TraceEvent != nil {
-			TraceEvent(old.state(), c.state.state(), m.name(), e)
+			switch m.(type) {
+			case *DATA:
+				if e != nil {
+					TraceEvent(old.state(), c.state.state(), m.name(), e)
+				}
+			default:
+				TraceEvent(old.state(), c.state.state(), m.name(), e)
+			}
 		}
 		if _, ok := m.(*down); ok {
 			break

@@ -34,11 +34,26 @@ func main() {
 			if err != nil {
 				log.Printf("[INFO] event %s handling failed: %v", event, err)
 			}
+			if old != "inactive" && new == "inactive" {
+				log.Println("[INFO]", "ASP state update: inactive")
+			} else if old != "active" && new == "active" {
+				log.Println("[INFO]", "ASP state update: active")
+			}
 		}
-		tcap.TraceMessage = func(m tcap.Message, d tcap.Direction, e error) {
-			count(m, d)
+		tcap.TraceTxMessage = func(m tcap.Message, _ error) { count(m, false) }
+		tcap.TraceRxMessage = func(m tcap.Message, _ error) { count(m, true) }
+		traceTxDalog = func(_, _ string) {}
+		traceRxDalog = func(_, _ string) {}
+		traceTxHttpRequest = func(_ string, _ []byte, _ int, _ []byte, err error) {
+			if err != nil {
+				log.Printf("[INFO] Tx HTTP request handling failed: %v", err)
+			}
 		}
-		traceDalog = func(d tcap.Direction, n, v string) {}
+		traceRxHttpRequest = func(_ string, _ []byte, _ int, _ []byte, err error) {
+			if err != nil {
+				log.Printf("[INFO] Rx HTTP request handling failed: %v", err)
+			}
+		}
 	}
 
 	if to := os.Getenv("TIMEOUT"); to == "" {
@@ -59,7 +74,9 @@ func main() {
 		if a := os.Getenv(fmt.Sprintf("PEER_ADDR%d", i)); a == "" {
 			continue
 		} else if p, e := xua.ParseSCTPAddr(a); e != nil {
-			log.Fatalln("[ERROR]", "invalid peer identity of", a, ":", e)
+			log.Fatalln("[ERROR]", "invalid peer address of", a, ":", e)
+		} else if len(p.IP) == 0 || p.IP[0].To4() == nil {
+			log.Fatalln("[ERROR]", "invalid peer address of", a, ": not IPv4")
 		} else {
 			pa = append(pa, p)
 		}
@@ -88,7 +105,8 @@ func main() {
 	} else {
 		tcap.EndPoint.Context = uint32(i)
 	}
-	switch os.Getenv("NETWORK_INDICATOR") {
+	ni := os.Getenv("NETWORK_INDICATOR")
+	switch ni {
 	case "international":
 		tcap.EndPoint.NetIndicator = 0
 	case "spare":
@@ -98,6 +116,7 @@ func main() {
 	case "reserved":
 		tcap.EndPoint.NetIndicator = 3
 	default:
+		ni = "international"
 		tcap.EndPoint.NetIndicator = 0
 	}
 	if i, e := strconv.Atoi(os.Getenv("NETWORK_APPEARANCE")); e != nil {
@@ -126,12 +145,12 @@ func main() {
 	log.Printf("[INFO] ASP local information"+
 		"\n | address:                     %s"+
 		"\n | point code(routing context): %d(%d)"+
-		"\n | network indicator:           %d"+
+		"\n | network indicator:           %s"+
 		"\n | network appearance:          %d"+
 		"\n | global title/ssn:            %s / %s",
 		la,
 		tcap.EndPoint.LocalPointCode, tcap.EndPoint.Context,
-		tcap.EndPoint.NetIndicator,
+		ni,
 		tcap.EndPoint.NetAppearance,
 		tcap.LocalGT.GlobalTitle, tcap.LocalGT.SubsystemNumber)
 
@@ -189,14 +208,10 @@ func main() {
 		}()
 	} else {
 		for _, a := range pa {
-			if a == nil || len(a.IP) == 0 {
-				log.Fatalln("[ERROR]", "invalid peer address")
-			} else if a.IP[0].To4() == nil {
-				log.Fatalln("[ERROR]", "invalid peer address")
-			}
 			go tcap.EndPoint.ConnectTo(a)
 		}
 	}
+
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sigc

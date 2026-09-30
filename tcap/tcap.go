@@ -13,6 +13,7 @@ var (
 	Tw = time.Second * 30
 )
 
+// ComponentHandler handle continue component of active transaction.
 type ComponentHandler func(*Transaction, []gsmap.Component, error)
 
 /*
@@ -42,8 +43,8 @@ func HandlePayload(ud xua.UnitData) {
 		if e == nil {
 			e = fmt.Errorf("unidirectional is not supported")
 		}
-		if TraceMessage != nil {
-			TraceMessage(msg, Rx, e)
+		if TraceRxMessage != nil {
+			TraceRxMessage(msg, e)
 		}
 		if e != nil && RxFailureNotify != nil {
 			RxFailureNotify(fmt.Errorf("invalid Unidirectional data: %v", e), ud.Data)
@@ -51,8 +52,8 @@ func HandlePayload(ud xua.UnitData) {
 
 	case 0x62: // Begin
 		msg, e := unmarshalTcBegin(v)
-		if TraceMessage != nil {
-			TraceMessage(msg, Rx, e)
+		if TraceRxMessage != nil {
+			TraceRxMessage(msg, e)
 		}
 		if e != nil {
 			sendAbort(ud.CgPA, msg.otid, TcBadlyFormattedTransactionPortion)
@@ -72,8 +73,8 @@ func HandlePayload(ud xua.UnitData) {
 		} else if len(t.rxStack) == cap(t.rxStack) {
 			e = fmt.Errorf("unexpected response")
 		}
-		if TraceMessage != nil {
-			TraceMessage(msg, Rx, e)
+		if TraceRxMessage != nil {
+			TraceRxMessage(msg, e)
 		}
 		if e == nil {
 			t.CdPA = ud.CgPA
@@ -86,8 +87,8 @@ func HandlePayload(ud xua.UnitData) {
 
 	case 0x65: // Continue
 		if msg, e := unmarshalTcContinue(v); e != nil {
-			if TraceMessage != nil {
-				TraceMessage(msg, Rx, e)
+			if TraceRxMessage != nil {
+				TraceRxMessage(msg, e)
 			}
 			sendAbort(ud.CgPA, msg.otid, TcBadlyFormattedTransactionPortion)
 
@@ -95,19 +96,19 @@ func HandlePayload(ud xua.UnitData) {
 				RxFailureNotify(fmt.Errorf("invalid Continue data: %v", e), ud.Data)
 			}
 		} else if t := GetTransaction(msg.dtid); t == nil {
-			if TraceMessage != nil {
-				TraceMessage(msg, Rx, fmt.Errorf("no active TC"))
+			if TraceRxMessage != nil {
+				TraceRxMessage(msg, fmt.Errorf("no active TC"))
 			}
 			sendAbort(ud.CgPA, msg.otid, TcUnrecognizedTransactionID)
 		} else if len(t.rxStack) == cap(t.rxStack) {
-			if TraceMessage != nil {
-				TraceMessage(msg, Rx, fmt.Errorf("unexpected response"))
+			if TraceRxMessage != nil {
+				TraceRxMessage(msg, fmt.Errorf("unexpected response"))
 			}
 			sendAbort(ud.CgPA, msg.otid, TcResourceLimitation)
 			t.deregister()
 		} else {
-			if TraceMessage != nil {
-				TraceMessage(msg, Rx, e)
+			if TraceRxMessage != nil {
+				TraceRxMessage(msg, e)
 			}
 			t.CdPA = ud.CgPA
 			t.rxStack <- msg
@@ -120,8 +121,8 @@ func HandlePayload(ud xua.UnitData) {
 		} else if t = GetTransaction(msg.dtid); t == nil {
 			e = fmt.Errorf("no active TC")
 		}
-		if TraceMessage != nil {
-			TraceMessage(msg, Rx, e)
+		if TraceRxMessage != nil {
+			TraceRxMessage(msg, e)
 		}
 		if e == nil {
 			t.CdPA = ud.CgPA
@@ -140,8 +141,8 @@ func sendAbort(cdpa xua.SCCPAddr, tid uint32, cause Cause) {
 		pCause: cause,
 	}
 	if tid == 0 {
-		if TraceMessage != nil {
-			TraceMessage(msg, Tx, fmt.Errorf("tid not defined"))
+		if TraceTxMessage != nil {
+			TraceTxMessage(msg, fmt.Errorf("tid not defined"))
 		}
 		return
 	}
@@ -152,8 +153,8 @@ func send(cdpa, cgpa xua.SCCPAddr, msg Message) (e error) {
 	if EndPoint == nil {
 		e = fmt.Errorf("failed to select destination")
 	}
-	if TraceMessage != nil {
-		TraceMessage(msg, Tx, e)
+	if TraceTxMessage != nil {
+		TraceTxMessage(msg, e)
 	}
 	if EndPoint != nil {
 		ud := xua.UnitData{
@@ -161,7 +162,7 @@ func send(cdpa, cgpa xua.SCCPAddr, msg Message) (e error) {
 			CdPA:          cdpa,
 			CgPA:          cgpa,
 			Data:          msg.marshalTc()}
-		EndPoint.Write(ud)
+		e = EndPoint.Write(ud)
 	}
 	return
 }

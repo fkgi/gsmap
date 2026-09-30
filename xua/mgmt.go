@@ -53,7 +53,7 @@ type ERR struct {
 }
 
 func (m *ERR) handle(c *ASP) (e error) {
-	if c.ctx != 0 && m.ctx != c.ctx {
+	if c.ctx != 0 && m.ctx != 0 && m.ctx != c.ctx {
 		e = fmt.Errorf("routing context missmatch")
 	}
 	return
@@ -100,8 +100,11 @@ func (m *ERR) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	return
 }
 
-func (m *ERR) name() string { return "rxERR" }
-func (*ERR) state() string  { return "" }
+func (m *ERR) name() string {
+	return fmt.Sprintf("rxERR(%s)", m.code)
+}
+
+func (*ERR) state() string { return "" }
 
 type ErrCode uint32
 
@@ -227,9 +230,10 @@ func (m *NTFY) handle(c *ASP) (e error) {
 		m.ctx = c.ctx
 		e = c.send(m, 0)
 		m.result <- e
+		c.eventQ <- m
 	} else {
 		// handle Rx
-		if c.ctx != 0 && m.ctx != c.ctx {
+		if m.ctx != 0 && c.ctx != 0 && m.ctx != c.ctx {
 			e = c.send(&ERR{
 				code: InvalidRoutingContext, ctx: m.ctx}, 0)
 		} else {
@@ -269,8 +273,15 @@ func (m *NTFY) unmarshal(t, l uint16, r io.ReadSeeker) (e error) {
 	return
 }
 
-func (m *NTFY) name() string { return "rxNTFY" }
-func (*NTFY) state() string  { return "" }
+func (m *NTFY) name() string {
+	if m.result != nil {
+		return "txNTFY"
+	} else {
+		return "rxNTFY"
+	}
+}
+
+func (*NTFY) state() string { return "" }
 
 // 0x02 TEI Status Request
 // 0x03 TEI Status Confirm
