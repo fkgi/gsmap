@@ -42,8 +42,8 @@ func main() {
 		}
 		tcap.TraceTxMessage = func(m tcap.Message, _ error) { count(m, false) }
 		tcap.TraceRxMessage = func(m tcap.Message, _ error) { count(m, true) }
-		traceTxDalog = func(_, _ string) {}
-		traceRxDalog = func(_, _ string) {}
+		traceTxDialog = func(_, _ string) {}
+		traceRxDialog = func(_, _ string) {}
 		traceTxHttpRequest = func(_ string, _ []byte, _ int, _ []byte, err error) {
 			if err != nil {
 				log.Printf("[INFO] Tx HTTP request handling failed: %v", err)
@@ -237,6 +237,13 @@ func readFromJSON(d []byte, defaultID int8) (cdpa xua.SCCPAddr, cgpa *xua.SCCPAd
 		case "cgpa":
 			cgpa = &xua.SCCPAddr{}
 			e = json.Unmarshal(v, cgpa)
+		case "EmptyResult":
+			var c gsmap.Component
+			c, e = tcap.EmptyResult{}.NewFromJSON(v, defaultID)
+			if e == nil {
+				cpnt = append([]gsmap.Component{c}, cpnt...)
+			}
+			defaultID++
 		default:
 			if c, ok := gsmap.NameMap[k]; !ok {
 				e = errors.New("unknown component: " + k)

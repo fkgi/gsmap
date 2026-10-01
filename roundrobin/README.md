@@ -79,11 +79,11 @@ Round-Robin connect to specified peers and activate ASP.
 Peer Point Code digits.
 
 - `TIMEOUT`  
-Message timeout (seconds).
+Message timeout (seconds). Default is `30`.
 
 - `LOCALAPI_ADDR`  
 Local listening address and port for receiving HTTP REST request.
-Value must have format `host[:port]`.
+Value must have format `[host]:port`.
 `host` is hostname or IP address.
 IP address is resolved from hostname if hostname is specified.
 `port` is port number.
@@ -100,7 +100,7 @@ Verbose log mode. Message trace log is logged.
 
 # HTTP API
 ## Start Dialog
-```
+``` sh
 POST /mapmsg/v1/{context}/{version}
 Content-Type: application/json
 
@@ -110,14 +110,75 @@ Content-Type: application/json
 }
 ```
 
-## Continue/End Dialog
-```
+## Continue Dialog
+Continue from HTTP client side.
+``` sh
 POST /dialog/{id}
+Content-Type: application/json
+
+{
+  "cdpa": {...},
+  "Invoke/ReturnresultComponentName": {...}
+}
+```
+
+Continue from HTTP server side.
+``` sh
+201 Created
+Content-Type: application/json
+Location: http://{host}/dialog/{id}
+
+{
+  "Invoke/ReturnresultComponentName": {...}
+}
+```
+
+## End Dialog
+End from HTTP client side.
+``` sh
 DELETE /dialog/{id}
+Content-Type: application/json
+
+{
+  "cdpa": {...},
+  "ReturnresultComponentName": {...}
+}
+```
+
+End from HTTP server side.
+``` sh
+200 OK
+Content-Type: application/json
+
+{
+  "ReturnresultComponentName": {...}
+}
+```
+
+## Abort Dialog
+Abort from HTTP client side.
+``` sh
+### not implemented yet ###
+```
+
+Abort from HTTP server side.
+``` sh
+406 NotAcceptable
+```
+
+## Context Version Fallback
+``` sh
+301 MovedPermanently
+Location: http://{host}/mapmsg/v1/{context}/{version}
+```
+
+## Discard
+``` sh
+503 ServiceUnavailable
 ```
 
 ## Get Status
-```
+``` sh
 GET /mapstate/v1/connection
 GET /mapstate/v1/statistics
 ```

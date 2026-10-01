@@ -10,11 +10,11 @@ import (
 	"github.com/fkgi/gsmap/xua"
 )
 
-var traceTxDalog = func(n, v string) {
+var traceTxDialog = func(n, v string) {
 	log.Println("[INFO]", "Tx new dialog", n, v)
 }
 
-var traceRxDalog = func(n, v string) {
+var traceRxDialog = func(n, v string) {
 	log.Println("[INFO]", "Rx new dialog", n, v)
 }
 

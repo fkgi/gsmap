@@ -18,7 +18,7 @@ func handleIncomingDialog(t *tcap.Transaction, cp []gsmap.Component) (
 	[]gsmap.Component, gsmap.AppContext, tcap.ComponentHandler) {
 
 	n, v := getContextName(t.GetContext())
-	traceRxDalog(n, v)
+	traceRxDialog(n, v)
 	path := "/mapmsg/v1/" + n + "/" + v
 
 	var internalErr []gsmap.Component
@@ -71,9 +71,9 @@ func handleIncomingDialog(t *tcap.Transaction, cp []gsmap.Component) (
 	case http.StatusNotAcceptable:
 		traceTxHttpRequest(path, txjson, r.StatusCode, nil, nil)
 		return []gsmap.Component{}, 0, nil
-	case http.StatusNoContent:
-		traceTxHttpRequest(path, txjson, r.StatusCode, nil, nil)
-		return []gsmap.Component{tcap.EmptyResult{InvokeID: cp[0].GetInvokeID()}}, 0, nil
+		//	case http.StatusNoContent:
+		//		traceTxHttpRequest(path, txjson, r.StatusCode, nil, nil)
+		//		return []gsmap.Component{tcap.EmptyResult{InvokeID: cp[0].GetInvokeID()}}, 0, nil
 	default:
 		e = errors.New("error from backend: " + r.Status)
 		traceTxHttpRequest(path, txjson, r.StatusCode, nil, e)
