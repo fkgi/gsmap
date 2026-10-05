@@ -173,23 +173,33 @@ func main() {
 		tcap.NewInvoke = handleIncomingDialog
 	}
 
-	tcap.DialogueHandler = func(q tcap.AARQ) tcap.Dialogue {
-		n, v := getContextName(q.Context)
-		if n != "" && v != "" {
-			return &tcap.AARE{
-				Context:   q.Context,
-				Result:    tcap.Accept,
-				ResultSrc: tcap.SrcUsrNull}
+	/*
+		tcap.DialogueHandler = func(q tcap.AARQ) tcap.Dialogue {
+			n, v := getContextName(q.Context)
+			if n != "" && v != "" {
+				return &tcap.AARE{
+					Context:   q.Context,
+					Result:    tcap.Accept,
+					ResultSrc: tcap.SrcUsrNull}
+			}
+			log.Println("[INFO]", "unsupported application context is required: ", q.Context)
+			return &tcap.ABRT{Source: tcap.SvcUser}
 		}
-		log.Println("[INFO]", "unsupported application context is required: ", q.Context)
-		return &tcap.ABRT{Source: tcap.SvcUser}
-	}
+	*/
 
 	http.HandleFunc("POST /mapmsg/v1/{ac}/{ver}", handleOutgoingDialog)
+	http.HandleFunc("POST /dialog/{id}/continue", handleContinueDialogContinue)
+	http.HandleFunc("POST /dialog/{id}/end", handleContinueDialogEnd)
+	http.HandleFunc("POST /dialog/{id}/abort", handleContinueDialogAbort)
+	// http.HandleFunc("POST /dialog/{id}/{action}", handleContinueDialogPost)
 	http.HandleFunc("POST /dialog/{id}", handleContinueDialog)
-	http.HandleFunc("DELETE /dialog/{id}", handleContinueDialog)
+	http.HandleFunc("DELETE /dialog/{id}", handleContinueDialogDelete)
 	http.HandleFunc("GET /mapstate/v1/connection", conStateHandler)
 	http.HandleFunc("GET /mapstate/v1/statistics", statsHandler)
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		traceRxHttpRequest(r.URL.Path, nil, http.StatusNotFound, nil, nil)
+	})
 
 	frontend := os.Getenv("LOCALAPI_ADDR")
 	log.Println("[INFO]", "listening HTTP...\n | local port:", frontend)

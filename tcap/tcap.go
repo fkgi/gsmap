@@ -18,11 +18,11 @@ type ComponentHandler func(*Transaction, []gsmap.Component, error)
 
 /*
 If response Component is nil, the dialog will be discarded (no response).
-If response Component is empty slice, the dialog will be rejected (TC-Abort).
-If response Component has elements, the dialog will be responded with the given components.
+If response Dialogue is nil, the dialog will success with AARE and continue if ComponentHandler is not nil or end if ComponentHandler is nil.
+If response Dialogue is ABRT, the dialog will be abort.
 */
-var NewInvoke = func(*Transaction, []gsmap.Component) ([]gsmap.Component, gsmap.AppContext, ComponentHandler) {
-	return []gsmap.Component{}, 0, nil
+var NewInvoke = func(*Transaction, []gsmap.Component) ([]gsmap.Component, Dialogue, ComponentHandler) {
+	return []gsmap.Component{}, &ABRT{Source: SvcProvider}, nil
 }
 
 var EndPoint *xua.SignalingPoint
@@ -136,17 +136,12 @@ func HandlePayload(ud xua.UnitData) {
 }
 
 func sendAbort(cdpa xua.SCCPAddr, tid uint32, cause Cause) {
-	msg := &TcAbort{
-		dtid:   tid,
-		pCause: cause,
+	msg := &TcAbort{dtid: tid, pCause: cause}
+	if tid != 0 {
+		send(cdpa, LocalGT, msg)
+	} else if TraceTxMessage != nil {
+		TraceTxMessage(msg, fmt.Errorf("tid not defined"))
 	}
-	if tid == 0 {
-		if TraceTxMessage != nil {
-			TraceTxMessage(msg, fmt.Errorf("tid not defined"))
-		}
-		return
-	}
-	send(cdpa, LocalGT, msg)
 }
 
 func send(cdpa, cgpa xua.SCCPAddr, msg Message) (e error) {

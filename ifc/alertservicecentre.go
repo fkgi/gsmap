@@ -27,10 +27,10 @@ func init() {
 /*
 AlertServiceCentreWithoutResult operation arg.
 
-		AlertServiceCentreArg ::= SEQUENCE {
-			msisdn                        ISDN-AddressString,
-			serviceCentreAddress          AddressString,
-	     	... }
+	AlertServiceCentreArg ::= SEQUENCE {
+		msisdn                        ISDN-AddressString,
+		serviceCentreAddress          AddressString,
+	   	... }
 */
 type AlertServiceCentreWithoutResult struct {
 	InvokeID int8 `json:"id"`

@@ -2,6 +2,7 @@ package tcap
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"math/rand"
 	"time"
@@ -62,22 +63,32 @@ func (t *Transaction) deregister() {
 	activeTC <- tcs
 }
 
-func (t *Transaction) verifyDalogue(d Dialogue) error {
+type FallbackError struct {
+	Context gsmap.AppContext
+}
+
+func (e FallbackError) Error() string {
+	return fmt.Sprintf("fallback to %016x is required", e.Context)
+}
+
+func (t *Transaction) verifyDalogue(d Dialogue) (e error) {
 	switch d := d.(type) {
 	case *AARE:
-		if d.Result != Accept {
-			return errors.New("dialogue rejected")
+		if d.Result == RejectPermanent && d.ResultSrc == SrcUsrACNameNotSupported {
+			e = FallbackError{Context: d.Context}
+		} else if d.Result != Accept {
+			e = errors.New("dialogue rejected")
 		} else if d.Context != t.ctx {
-			return errors.New("context missmatch")
+			e = errors.New("context missmatch")
 		}
 	case nil:
 		if t.ctx&0x000000000000000f != 0x0000000000000001 {
-			return errors.New("unexpected dialogue")
+			e = errors.New("unexpected dialogue")
 		}
 	default:
-		return errors.New("unexpected dialogue")
+		e = errors.New("unexpected dialogue")
 	}
-	return nil
+	return
 }
 
 func GetTransaction(id uint32) (t *Transaction) {
@@ -87,7 +98,11 @@ func GetTransaction(id uint32) (t *Transaction) {
 	return
 }
 
+// End transaction.
 func (t *Transaction) End(c ...gsmap.Component) {
+	if GetTransaction(t.otid) == nil {
+		return
+	}
 	send(t.CdPA, LocalGT, &TcEnd{dtid: t.dtid, component: c})
 	t.deregister()
 }
@@ -95,8 +110,11 @@ func (t *Transaction) End(c ...gsmap.Component) {
 // Continue transaction.
 // Result error is io.EOF if TC-End.
 func (t *Transaction) Continue(c ...gsmap.Component) ([]gsmap.Component, error) {
-	msg := t.send(&TcContinue{otid: t.otid, dtid: t.dtid, component: c})
+	if GetTransaction(t.otid) == nil {
+		return nil, &TcAbort{dtid: t.otid, pCause: TcUnrecognizedMessageType}
+	}
 
+	msg := t.send(&TcContinue{otid: t.otid, dtid: t.dtid, component: c})
 	switch m := msg.(type) {
 	case *TcContinue:
 		return m.component, nil
@@ -107,6 +125,11 @@ func (t *Transaction) Continue(c ...gsmap.Component) ([]gsmap.Component, error) 
 	default:
 		panic("unexpected response")
 	}
+}
+
+func (t *Transaction) pReject(c Cause) {
+	send(t.CdPA, LocalGT, &TcAbort{dtid: t.dtid, pCause: c})
+	t.deregister()
 }
 
 func (t *Transaction) Reject() {
@@ -121,28 +144,44 @@ func (t *Transaction) Discard() {
 	t.deregister()
 }
 
-func DialTC(ctx gsmap.AppContext, cdpa xua.SCCPAddr, i ...gsmap.Component) (t *Transaction, c []gsmap.Component, e error) {
+func DialTC(ctx gsmap.AppContext, cdpa xua.SCCPAddr, handshake bool, invokes ...gsmap.Component) (t *Transaction, c []gsmap.Component, e error) {
 	t = &Transaction{
 		CdPA:    cdpa,
 		rxStack: make(chan Message, 1),
 		ctx:     ctx}
 	t.register()
 
+	if handshake {
+		switch m := t.send(&TcBegin{otid: t.otid}).(type) {
+		case *TcContinue:
+			t.dtid = m.otid
+		default:
+			e = errors.New("unexpected response")
+			t.deregister()
+			return
+		}
+	}
+
 	var d Dialogue
 	if ctx&0x000000000000000f != 0x0000000000000001 {
 		d = &AARQ{Context: ctx}
 	}
-	msg := t.send(&TcBegin{otid: t.otid, dialogue: d, component: i})
 
-	switch m := msg.(type) {
+	var msg Message
+	if handshake {
+		msg = &TcContinue{otid: t.otid, dtid: t.dtid, dialogue: d, component: invokes}
+	} else {
+		msg = &TcBegin{otid: t.otid, dialogue: d, component: invokes}
+	}
+	switch m := t.send(msg).(type) {
 	case *TcContinue:
 		t.dtid = m.otid
 		if e = t.verifyDalogue(m.dialogue); e == nil {
 			c = m.component
 		} else {
-			sendAbort(t.CdPA, t.dtid, TcIncorrectTransactionPortion)
-			t.deregister()
+			t.pReject(TcIncorrectTransactionPortion)
 		}
+		return
 	case *TcEnd:
 		if e = t.verifyDalogue(m.dialogue); e == nil {
 			c = m.component
@@ -150,10 +189,14 @@ func DialTC(ctx gsmap.AppContext, cdpa xua.SCCPAddr, i ...gsmap.Component) (t *T
 		}
 	case *TcAbort:
 		e = m
+		if d, ok := m.uCause.(*AARE); !ok {
+		} else if d.Result == RejectPermanent && d.ResultSrc == SrcUsrACNameNotSupported {
+			e = FallbackError{Context: d.Context}
+		}
 	default:
 		e = errors.New("unexpected response")
 	}
-
+	t.deregister()
 	return
 }
 
@@ -162,60 +205,83 @@ func acceptTC(msg *TcBegin, cgpa xua.SCCPAddr) {
 		dtid:    msg.otid,
 		CdPA:    cgpa,
 		rxStack: make(chan Message, 1)}
-
-	var dres Dialogue
-	if msg.dialogue == nil && len(msg.component) != 0 {
-		if inv, ok := msg.component[0].(gsmap.Invoke); ok {
-			t.ctx = inv.DefaultContext()
-		}
-	} else if dlg, ok := msg.dialogue.(*AARQ); ok {
-		dres = DialogueHandler(*dlg)
-		if re, ok := dres.(*ABRT); ok {
-			send(cgpa, LocalGT, &TcAbort{dtid: t.dtid, uCause: re})
-			return
-		} else if re, ok := dres.(*AARE); !ok {
-			send(cgpa, LocalGT, &TcAbort{dtid: t.dtid, pCause: TcUnrecognizedMessageType})
-			return
-		} else if re.Result != Accept {
-			send(cgpa, LocalGT, &TcEnd{dtid: t.dtid, dialogue: dres})
-			return
-		} else {
-			t.ctx = re.Context
-		}
-	}
 	t.register()
 
-	if cres, newctx, following := NewInvoke(t, msg.component); newctx != 0 {
-		/*if newctx&0x000000000000000f == 0x0000000000000001 {
-			send(cgpa, &TcAbort{
-				dtid:   t.dtid,
-				uCause: &ABRT{Source: SvcUser}})
-		} else {*/
-		send(cgpa, LocalGT, &TcAbort{
-			dtid: t.dtid,
-			uCause: &AARE{
-				Context:   newctx,
-				Result:    RejectPermanent,
-				ResultSrc: SrcUsrACNameNotSupported}})
-		// }
+	// handshake
+	if msg.dialogue == nil && len(msg.component) == 0 {
+		if send(cgpa, LocalGT, &TcContinue{otid: t.otid, dtid: t.dtid}) != nil {
+			t.deregister()
+		} else {
+			timer := time.AfterFunc(Tw, func() {
+				t.rxStack <- &TcAbort{dtid: t.otid, pCause: TcTimeout}
+			})
+			res := <-t.rxStack
+			timer.Stop()
+
+			switch m := res.(type) {
+			case *TcContinue:
+				msg.dialogue = m.dialogue
+				msg.component = m.component
+			case *TcEnd, *TcAbort:
+				t.deregister()
+				return
+			default:
+				panic("unexpected response")
+			}
+		}
+	}
+
+	if msg.dialogue == nil && len(msg.component) == 0 {
+		// repetition of empty message
+		t.pReject(TcIncorrectTransactionPortion)
+		return
+	} else if msg.dialogue == nil && len(msg.component) != 0 {
+		// v1 begin
+		if c, ok := msg.component[0].(gsmap.Invoke); ok {
+			t.ctx = c.DefaultContext()
+		} else {
+			t.pReject(TcIncorrectTransactionPortion)
+			return
+		}
+	} else if dlg, ok := msg.dialogue.(*AARQ); ok {
+		// v2/v3 begin
+		t.ctx = dlg.Context
+	} else {
+		// invalid dialogue
+		t.pReject(TcIncorrectTransactionPortion)
+		return
+	}
+
+	cres, dres, following := NewInvoke(t, msg.component)
+	switch d := dres.(type) {
+	case nil:
+		dres = &AARE{Context: t.ctx, Result: Accept, ResultSrc: SrcUsrNull}
+	case *ABRT:
+		send(cgpa, LocalGT, &TcAbort{dtid: t.dtid, uCause: dres})
 		t.deregister()
-	} else if cres == nil {
+		return
+	case *AARE:
+		if d.Result != Accept {
+			send(cgpa, LocalGT, &TcEnd{dtid: t.dtid, dialogue: dres})
+			t.deregister()
+			return
+		}
+	default:
+		t.pReject(TcUnrecognizedMessageType)
+		return
+	}
+
+	if cres == nil {
 		t.Discard()
-	} else if len(cres) == 0 && len(msg.component) != 0 {
-		t.Reject()
-	} else if len(cres) == 0 && len(msg.component) == 0 && following == nil {
-		t.Reject()
 	} else if following == nil {
 		send(cgpa, LocalGT, &TcEnd{
-			dtid:      t.dtid,
-			dialogue:  dres,
-			component: cres})
+			dtid:     t.dtid,
+			dialogue: dres, component: cres})
 		t.deregister()
-	} else if send(cgpa, LocalGT, &TcContinue{
-		otid:      t.otid,
-		dtid:      t.dtid,
-		dialogue:  dres,
-		component: cres}) != nil {
+	} else if send(cgpa, LocalGT,
+		&TcContinue{
+			otid: t.otid, dtid: t.dtid,
+			dialogue: dres, component: cres}) != nil {
 		t.deregister()
 	} else {
 		timer := time.AfterFunc(Tw, func() {
@@ -230,11 +296,7 @@ func acceptTC(msg *TcBegin, cgpa xua.SCCPAddr) {
 		case *TcEnd:
 			following(t, m.component, io.EOF)
 		case *TcAbort:
-			if m.pCause == TcTimeout {
-				following(t, nil, errors.New("timeout"))
-			} else {
-				following(t, nil, errors.New(m.String()))
-			}
+			following(t, nil, m)
 		default:
 			panic("unexpected response")
 		}

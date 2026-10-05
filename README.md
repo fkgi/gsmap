@@ -9,7 +9,7 @@ This package is designed for use in telecom signaling, testing, and development 
 
 ## Features
 - MAP protocol implementation (C, D, E interfaces)
-- TCAP, SUA, SCCP+M3UA, and SCTP protocol stacks
+- TCAP, SCCP, M3UA, and SCTP protocol stacks
 - SCTP support via Linux kernel module
 - Modular and extensible Go codebase
 - Suitable for building MAP-based applications, simulators, and test tools
@@ -21,7 +21,9 @@ This package is designed for use in telecom signaling, testing, and development 
 +-------------------+
 |      TCAP         |
 +-------------------+
-| SUA | SCCP+M3UA   |
+|      SCCP         |
++-------------------+
+|      M3UA         |
 +-------------------+
 |      SCTP         |
 +-------------------+
@@ -31,7 +33,7 @@ This package is designed for use in telecom signaling, testing, and development 
 
 - **MAP**: Implements Mobile Application Protocol logic for C, D, E interfaces.
 - **TCAP**: Transaction Capabilities Application Part for dialog management.
-- **SUA/SCCP+M3UA**: Signaling transport over IP networks.
+- **SCCP+M3UA**: Signaling transport over IP networks.
 - **SCTP**: Stream Control Transmission Protocol (Linux only).
 
 ## Requirements
@@ -40,7 +42,7 @@ This package is designed for use in telecom signaling, testing, and development 
 
 ## Restriction
 - Only UDT is supported (XUDT/LUDT is not supported) for SCCP
-- Only connection less classes are supported for SCCP/SUA
+- Only connection less classes are supported for SCCP
 - For SSNM xUA message, only recieveing is supported
 
 ## Usage

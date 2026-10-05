@@ -10,13 +10,6 @@ import (
 	"github.com/fkgi/gsmap"
 )
 
-var DialogueHandler = func(q AARQ) Dialogue {
-	return &AARE{
-		Context:   q.Context,
-		Result:    Accept,
-		ResultSrc: SrcUsrNull}
-}
-
 /*
 Dialogue
 
