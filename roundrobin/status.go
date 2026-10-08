@@ -76,7 +76,6 @@ func statsHandler(w http.ResponseWriter, r *http.Request) {
 
 func count(m tcap.Message, rx bool) {
 	s := <-stats
-
 	switch msg := m.(type) {
 	case *tcap.TcBegin, *tcap.TcContinue, *tcap.TcEnd:
 		for _, c := range msg.Components() {

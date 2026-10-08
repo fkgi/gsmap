@@ -160,7 +160,7 @@ func (c *ASP) recieve(se *SignalingPoint) {
 			}
 		}
 
-		if msg, ok := m.(*DATA); ok && msg.data.Cause == Success {
+		if msg, ok := m.(*DATA); ok && msg.data.Cause == 0 {
 			if PayloadHandler == nil {
 				if msg.data.ReturnOnError {
 					seq := <-se.sequence

@@ -36,11 +36,11 @@ func init() {
 		log.Println("[INFO]", "AS state update:", s)
 	}
 	tcap.TraceRxMessage = func(m tcap.Message, e error) {
-		log.Printf("[INFO] Rx MAP message handling: error=%v\n%s", e, m.String())
+		log.Printf("[INFO] Rx MAP message handling: error=%v\n%s", e, m)
 		count(m, true)
 	}
 	tcap.TraceTxMessage = func(m tcap.Message, e error) {
-		log.Printf("[INFO] Tx MAP message handling: error=%v\n%s", e, m.String())
+		log.Printf("[INFO] Tx MAP message handling: error=%v\n%s", e, m)
 		count(m, false)
 	}
 

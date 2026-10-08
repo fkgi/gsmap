@@ -2,7 +2,6 @@ package tcap
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"math/rand"
 	"time"
@@ -17,6 +16,28 @@ func init() {
 	activeTC <- map[uint32]*Transaction{}
 }
 
+func register(t *Transaction) {
+	tcs := <-activeTC
+	for ok := true; ok; _, ok = tcs[t.otid] {
+		t.otid = rand.Uint32()
+	}
+	tcs[t.otid] = t
+	activeTC <- tcs
+}
+
+func deregister(t *Transaction) {
+	tcs := <-activeTC
+	delete(tcs, t.otid)
+	activeTC <- tcs
+}
+
+func GetTransaction(id uint32) (t *Transaction) {
+	tcs := <-activeTC
+	t = tcs[id]
+	activeTC <- tcs
+	return
+}
+
 type Transaction struct {
 	otid    uint32
 	dtid    uint32
@@ -24,6 +45,7 @@ type Transaction struct {
 	ctx     gsmap.AppContext
 
 	CdPA         xua.SCCPAddr
+	CgPA         *xua.SCCPAddr
 	LastInvokeID int8
 }
 
@@ -32,7 +54,11 @@ func (t *Transaction) GetContext() gsmap.AppContext {
 }
 
 func (t *Transaction) send(m Message) Message {
-	if send(t.CdPA, LocalGT, m) != nil {
+	cgpa := LocalGT
+	if t.CgPA != nil {
+		cgpa = *t.CgPA
+	}
+	if send(t.CdPA, cgpa, m) != nil {
 		return &TcAbort{dtid: t.otid, pCause: TcNoDestination}
 	}
 
@@ -46,29 +72,6 @@ func (t *Transaction) send(m Message) Message {
 
 func (t *Transaction) GetIdentity() uint32 {
 	return t.otid
-}
-
-func (t *Transaction) register() {
-	tcs := <-activeTC
-	for ok := true; ok; _, ok = tcs[t.otid] {
-		t.otid = rand.Uint32()
-	}
-	tcs[t.otid] = t
-	activeTC <- tcs
-}
-
-func (t *Transaction) deregister() {
-	tcs := <-activeTC
-	delete(tcs, t.otid)
-	activeTC <- tcs
-}
-
-type FallbackError struct {
-	Context gsmap.AppContext
-}
-
-func (e FallbackError) Error() string {
-	return fmt.Sprintf("fallback to %016x is required", e.Context)
 }
 
 func (t *Transaction) verifyDalogue(d Dialogue) (e error) {
@@ -91,24 +94,21 @@ func (t *Transaction) verifyDalogue(d Dialogue) (e error) {
 	return
 }
 
-func GetTransaction(id uint32) (t *Transaction) {
-	tcs := <-activeTC
-	t = tcs[id]
-	activeTC <- tcs
-	return
-}
-
-// End transaction.
+// End transaction with TC-End.
 func (t *Transaction) End(c ...gsmap.Component) {
 	if GetTransaction(t.otid) == nil {
 		return
 	}
-	send(t.CdPA, LocalGT, &TcEnd{dtid: t.dtid, component: c})
-	t.deregister()
+	cgpa := LocalGT
+	if t.CgPA != nil {
+		cgpa = *t.CgPA
+	}
+	send(t.CdPA, cgpa, &TcEnd{dtid: t.dtid, component: c})
+	deregister(t)
 }
 
-// Continue transaction.
-// Result error is io.EOF if TC-End.
+// Continue transaction with TC-Continue.
+// Result error is io.EOF if response is TC-End.
 func (t *Transaction) Continue(c ...gsmap.Component) ([]gsmap.Component, error) {
 	if GetTransaction(t.otid) == nil {
 		return nil, &TcAbort{dtid: t.otid, pCause: TcUnrecognizedMessageType}
@@ -127,29 +127,42 @@ func (t *Transaction) Continue(c ...gsmap.Component) ([]gsmap.Component, error) 
 	}
 }
 
+// pReject transaction with TC-Abort with provider cause.
 func (t *Transaction) pReject(c Cause) {
-	send(t.CdPA, LocalGT, &TcAbort{dtid: t.dtid, pCause: c})
-	t.deregister()
+	cgpa := LocalGT
+	if t.CgPA != nil {
+		cgpa = *t.CgPA
+	}
+	send(t.CdPA, cgpa, &TcAbort{dtid: t.dtid, pCause: c})
+	deregister(t)
 }
 
+// Reject transaction with TC-Abort with user cause.
 func (t *Transaction) Reject() {
-	send(t.CdPA, LocalGT, &TcAbort{dtid: t.dtid, uCause: &ABRT{Source: SvcUser}})
-	t.deregister()
+	cgpa := LocalGT
+	if t.CgPA != nil {
+		cgpa = *t.CgPA
+	}
+	send(t.CdPA, cgpa, &TcAbort{dtid: t.dtid, uCause: &ABRT{Source: SvcUser}})
+	deregister(t)
 }
 
+// Discard transaction without any message.
 func (t *Transaction) Discard() {
 	if TraceTxMessage != nil {
 		TraceTxMessage(&TcAbort{dtid: t.dtid, pCause: TcDiscard}, nil)
 	}
-	t.deregister()
+	deregister(t)
 }
 
-func DialTC(ctx gsmap.AppContext, cdpa xua.SCCPAddr, handshake bool, invokes ...gsmap.Component) (t *Transaction, c []gsmap.Component, e error) {
+// DialTC begin local initiated new transaction.
+func DialTC(ctx gsmap.AppContext, cdpa xua.SCCPAddr, cgpa *xua.SCCPAddr, handshake bool, invokes ...gsmap.Component) (t *Transaction, c []gsmap.Component, e error) {
 	t = &Transaction{
 		CdPA:    cdpa,
+		CgPA:    cgpa,
 		rxStack: make(chan Message, 1),
 		ctx:     ctx}
-	t.register()
+	register(t)
 
 	if handshake {
 		switch m := t.send(&TcBegin{otid: t.otid}).(type) {
@@ -157,7 +170,7 @@ func DialTC(ctx gsmap.AppContext, cdpa xua.SCCPAddr, handshake bool, invokes ...
 			t.dtid = m.otid
 		default:
 			e = errors.New("unexpected response")
-			t.deregister()
+			deregister(t)
 			return
 		}
 	}
@@ -196,21 +209,22 @@ func DialTC(ctx gsmap.AppContext, cdpa xua.SCCPAddr, handshake bool, invokes ...
 	default:
 		e = errors.New("unexpected response")
 	}
-	t.deregister()
+	deregister(t)
 	return
 }
 
+// acceptTC begin peer initiated new transaction.
 func acceptTC(msg *TcBegin, cgpa xua.SCCPAddr) {
 	t := &Transaction{
 		dtid:    msg.otid,
 		CdPA:    cgpa,
 		rxStack: make(chan Message, 1)}
-	t.register()
+	register(t)
 
 	// handshake
 	if msg.dialogue == nil && len(msg.component) == 0 {
-		if send(cgpa, LocalGT, &TcContinue{otid: t.otid, dtid: t.dtid}) != nil {
-			t.deregister()
+		if send(t.CdPA, LocalGT, &TcContinue{otid: t.otid, dtid: t.dtid}) != nil {
+			deregister(t)
 		} else {
 			timer := time.AfterFunc(Tw, func() {
 				t.rxStack <- &TcAbort{dtid: t.otid, pCause: TcTimeout}
@@ -223,7 +237,7 @@ func acceptTC(msg *TcBegin, cgpa xua.SCCPAddr) {
 				msg.dialogue = m.dialogue
 				msg.component = m.component
 			case *TcEnd, *TcAbort:
-				t.deregister()
+				deregister(t)
 				return
 			default:
 				panic("unexpected response")
@@ -253,17 +267,21 @@ func acceptTC(msg *TcBegin, cgpa xua.SCCPAddr) {
 	}
 
 	cres, dres, following := NewInvoke(t, msg.component)
+	cgpa = LocalGT
+	if t.CgPA != nil {
+		cgpa = *t.CgPA
+	}
 	switch d := dres.(type) {
 	case nil:
 		dres = &AARE{Context: t.ctx, Result: Accept, ResultSrc: SrcUsrNull}
 	case *ABRT:
-		send(cgpa, LocalGT, &TcAbort{dtid: t.dtid, uCause: dres})
-		t.deregister()
+		send(t.CdPA, cgpa, &TcAbort{dtid: t.dtid, uCause: dres})
+		deregister(t)
 		return
 	case *AARE:
 		if d.Result != Accept {
-			send(cgpa, LocalGT, &TcEnd{dtid: t.dtid, dialogue: dres})
-			t.deregister()
+			send(t.CdPA, cgpa, &TcEnd{dtid: t.dtid, dialogue: dres})
+			deregister(t)
 			return
 		}
 	default:
@@ -274,15 +292,15 @@ func acceptTC(msg *TcBegin, cgpa xua.SCCPAddr) {
 	if cres == nil {
 		t.Discard()
 	} else if following == nil {
-		send(cgpa, LocalGT, &TcEnd{
+		send(t.CdPA, cgpa, &TcEnd{
 			dtid:     t.dtid,
 			dialogue: dres, component: cres})
-		t.deregister()
-	} else if send(cgpa, LocalGT,
+		deregister(t)
+	} else if send(t.CdPA, cgpa,
 		&TcContinue{
 			otid: t.otid, dtid: t.dtid,
 			dialogue: dres, component: cres}) != nil {
-		t.deregister()
+		deregister(t)
 	} else {
 		timer := time.AfterFunc(Tw, func() {
 			t.rxStack <- &TcAbort{dtid: t.otid, pCause: TcTimeout}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/fkgi/gsmap"
 	"github.com/fkgi/gsmap/tcap"
+	"github.com/fkgi/gsmap/xua"
 )
 
 var client http.Client
@@ -99,15 +100,23 @@ func handleIncomingDialog(t *tcap.Transaction, cp []gsmap.Component) (
 		traceTxHttpRequest(path, txjson, r.StatusCode, nil, e)
 		return internalErr, nil, nil
 	}
+	var cdpa, cgpa *xua.SCCPAddr
 	if len(rxjson) == 0 {
 		cp = []gsmap.Component{}
 	} else if rxjson, e = compact(rxjson); e != nil {
 		traceTxHttpRequest(path, txjson, r.StatusCode, rxjson, e)
 		return internalErr, nil, nil
-	} else if _, _, cp, e = readFromJSON(rxjson, t.LastInvokeID); e != nil {
+	} else if cdpa, cgpa, cp, e = readFromJSON(rxjson, t.LastInvokeID); e != nil {
 		e = errors.New("failed to unmarshal JSON: " + e.Error())
 		traceTxHttpRequest(path, txjson, r.StatusCode, rxjson, e)
 		return internalErr, nil, nil
+	}
+
+	if cdpa != nil {
+		t.CdPA = *cdpa
+	}
+	if cgpa != nil {
+		t.CgPA = cgpa
 	}
 
 	traceTxHttpRequest(path, txjson, r.StatusCode, rxjson, nil)
@@ -208,17 +217,26 @@ func following(t *tcap.Transaction, cp []gsmap.Component, e error, path string) 
 			t.End(&gsmap.SystemFailure{InvokeID: t.LastInvokeID})
 			return
 		}
+
+		var cdpa, cgpa *xua.SCCPAddr
 		if len(rxjson) == 0 {
 			cp = []gsmap.Component{}
 		} else if rxjson, e = compact(rxjson); e != nil {
 			traceTxHttpRequest(p, txjson, r.StatusCode, rxjson, e)
 			t.End(&gsmap.SystemFailure{InvokeID: t.LastInvokeID})
 			return
-		} else if _, _, cp, e = readFromJSON(rxjson, t.LastInvokeID); e != nil {
+		} else if cdpa, cgpa, cp, e = readFromJSON(rxjson, t.LastInvokeID); e != nil {
 			e = errors.New("failed to unmarshal JSON: " + e.Error())
 			traceTxHttpRequest(p, txjson, r.StatusCode, rxjson, e)
 			t.End(&gsmap.SystemFailure{InvokeID: t.LastInvokeID})
 			return
+		}
+
+		if cdpa != nil {
+			t.CdPA = *cdpa
+		}
+		if cgpa != nil {
+			t.CgPA = cgpa
 		}
 
 		traceTxHttpRequest(p, txjson, r.StatusCode, rxjson, nil)

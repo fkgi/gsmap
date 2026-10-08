@@ -233,7 +233,7 @@ func main() {
 	log.Println("[INFO]", "server stopped")
 }
 
-func readFromJSON(d []byte, defaultID int8) (cdpa xua.SCCPAddr, cgpa *xua.SCCPAddr, cpnt []gsmap.Component, e error) {
+func readFromJSON(d []byte, defaultID int8) (cdpa, cgpa *xua.SCCPAddr, cpnt []gsmap.Component, e error) {
 	data := map[string]json.RawMessage{}
 	if e = json.Unmarshal(d, &data); e != nil {
 		return
@@ -243,7 +243,8 @@ func readFromJSON(d []byte, defaultID int8) (cdpa xua.SCCPAddr, cgpa *xua.SCCPAd
 	for k, v := range data {
 		switch k {
 		case "cdpa":
-			e = json.Unmarshal(v, &cdpa)
+			cdpa = &xua.SCCPAddr{}
+			e = json.Unmarshal(v, cdpa)
 		case "cgpa":
 			cgpa = &xua.SCCPAddr{}
 			e = json.Unmarshal(v, cgpa)
@@ -276,7 +277,7 @@ func writeToJSON(cdpa, cgpa *xua.SCCPAddr, cpnt []gsmap.Component) ([]byte, erro
 	var e error
 	data := map[string]json.RawMessage{}
 	if cdpa != nil {
-		if data["cdpa"], e = json.Marshal(*cdpa); e != nil {
+		if data["cdpa"], e = json.Marshal(cdpa); e != nil {
 			return nil, e
 		}
 	}

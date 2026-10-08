@@ -9,7 +9,6 @@ import (
 type Cause uint32
 
 const (
-	Success                               Cause = 0x0000
 	NoTranslationForAnAddressOfSuchNature Cause = 0x0100
 	NoTranslationForThisSpecificAddress   Cause = 0x0101
 	SubsystemCongestion                   Cause = 0x0102
@@ -27,8 +26,45 @@ const (
 	SegmentationFailure                   Cause = 0x010e
 )
 
+func (c Cause) String() string {
+	switch c {
+	case NoTranslationForAnAddressOfSuchNature:
+		return "no_translation_for_an_address_of_such_nature"
+	case NoTranslationForThisSpecificAddress:
+		return "no_translation_for_this_specific_address"
+	case SubsystemCongestion:
+		return "subsystem_congestion"
+	case SubsystemFailure:
+		return "subsystem_failure"
+	case UnequippedUser:
+		return "unequipped_user"
+	case MtpFailure:
+		return "mtp_failure"
+	case NetworkCongestion:
+		return "network_congestion"
+	case Unqualified:
+		return "unqualified"
+	case ErrorInMessageTransport:
+		return "error_in_message_transport"
+	case ErrorInLocalProcessing:
+		return "error_in_local_processing"
+	case DestinationCannotPerformReassembly:
+		return "destination_cannot_perform_reassembly"
+	case SccpFailure:
+		return "sccp_failure"
+	case HopCounterViolation:
+		return "hop_counter_violation"
+	case SegmentationNotSupported:
+		return "segmentation_not_supported"
+	case SegmentationFailure:
+		return "segmentation_failure"
+	default:
+		return "unknown"
+	}
+}
+
 /*
-Unitdata (UDT)
+Unitdata (UDT, code=0x09)
 
 	Message type code     F 1 octet
 	Protocol class        F 1 octet
@@ -36,7 +72,7 @@ Unitdata (UDT)
 	Calling party address V 3- octets
 	Data                  V 2- octets
 
-Unitdata Service (UDTS)
+Unitdata Service (UDTS, code=0x0x0a)
 
 	Message type code     F 1 octet
 	Return cause          F 1 octet
@@ -55,7 +91,7 @@ type UnitData struct {
 
 func (u *UnitData) marshal() []byte {
 	ud := new(bytes.Buffer)
-	if u.Cause == Success {
+	if u.Cause == 0 {
 		ud.WriteByte(0x09)
 		if u.ReturnOnError {
 			ud.WriteByte((u.ProtocolClass & 0x0f) | 0x80)

@@ -10,6 +10,7 @@ import (
 
 	"github.com/fkgi/gsmap"
 	"github.com/fkgi/gsmap/tcap"
+	"github.com/fkgi/gsmap/xua"
 )
 
 func handleOutgoingDialog(w http.ResponseWriter, r *http.Request) {
@@ -32,10 +33,15 @@ func handleOutgoingDialog(w http.ResponseWriter, r *http.Request) {
 			"unable to read request body", e.Error(), w)
 		return
 	}
-	cdpa, _, cp, e := readFromJSON(txjson, 1)
+	cdpa, cgpa, cp, e := readFromJSON(txjson, 1)
 	if e != nil {
 		httpErr(r.URL.Path, txjson, http.StatusBadRequest,
 			"unexpected JSON data", e.Error(), w)
+		return
+	}
+	if cdpa == nil {
+		httpErr(r.URL.Path, txjson, http.StatusBadRequest,
+			"unexpected JSON data", "no CdPA", w)
 		return
 	}
 
@@ -43,7 +49,7 @@ func handleOutgoingDialog(w http.ResponseWriter, r *http.Request) {
 	traceTxDialog(n, v)
 
 	var t *tcap.Transaction
-	if t, cp, e = tcap.DialTC(ctx, cdpa, false, cp...); e == nil || e == io.EOF {
+	if t, cp, e = tcap.DialTC(ctx, *cdpa, cgpa, false, cp...); e == nil || e == io.EOF {
 	} else if fb, ok := e.(tcap.FallbackError); ok {
 		if n, v := getContextName(fb.Context); n == "" || v == "" {
 			httpErr(r.URL.Path, txjson, http.StatusInternalServerError,
@@ -122,10 +128,16 @@ func handleContinueDialogDelete(w http.ResponseWriter, r *http.Request) {
 	} else if txjson, e = compact(txjson); e != nil {
 		httpErr(r.URL.Path, txjson, http.StatusBadRequest,
 			"unable to read request body", e.Error(), w)
-	} else if _, _, cp, e := readFromJSON(txjson, t.LastInvokeID); e != nil {
+	} else if cdpa, cgpa, cp, e := readFromJSON(txjson, t.LastInvokeID); e != nil {
 		httpErr(r.URL.Path, txjson, http.StatusBadRequest,
 			"unexpected JSON data", e.Error(), w)
 	} else {
+		if cdpa != nil {
+			t.CdPA = *cdpa
+		}
+		if cgpa != nil {
+			t.CgPA = cgpa
+		}
 		// End (obsolate)
 		t.End(cp...)
 		w.WriteHeader(http.StatusNoContent)
@@ -150,16 +162,24 @@ func handleContinueDialogEnd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var cp []gsmap.Component
+	var cdpa, cgpa *xua.SCCPAddr
 	if len(txjson) == 0 {
 	} else if txjson, e = compact(txjson); e != nil {
 		httpErr(r.URL.Path, txjson, http.StatusBadRequest,
 			"unable to read request body", e.Error(), w)
 		return
-	} else if _, _, cp, e = readFromJSON(txjson, t.LastInvokeID); e != nil {
+	} else if cdpa, cgpa, cp, e = readFromJSON(txjson, t.LastInvokeID); e != nil {
 		httpErr(r.URL.Path, txjson, http.StatusBadRequest,
 			"unexpected JSON data", e.Error(), w)
 		return
 	}
+	if cdpa != nil {
+		t.CdPA = *cdpa
+	}
+	if cgpa != nil {
+		t.CgPA = cgpa
+	}
+
 	// End
 	t.End(cp...)
 	w.WriteHeader(http.StatusNoContent)
@@ -183,15 +203,22 @@ func handleContinueDialogContinue(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var cp []gsmap.Component
+	var cdpa, cgpa *xua.SCCPAddr
 	if len(txjson) == 0 {
 	} else if txjson, e = compact(txjson); e != nil {
 		httpErr(r.URL.Path, txjson, http.StatusBadRequest,
 			"unable to read request body", e.Error(), w)
 		return
-	} else if _, _, cp, e = readFromJSON(txjson, t.LastInvokeID); e != nil {
+	} else if cdpa, cgpa, cp, e = readFromJSON(txjson, t.LastInvokeID); e != nil {
 		httpErr(r.URL.Path, txjson, http.StatusBadRequest,
 			"unexpected JSON data", e.Error(), w)
 		return
+	}
+	if cdpa != nil {
+		t.CdPA = *cdpa
+	}
+	if cgpa != nil {
+		t.CgPA = cgpa
 	}
 
 	// Continue
@@ -246,15 +273,22 @@ func handleContinueDialog(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var cp []gsmap.Component
+	var cdpa, cgpa *xua.SCCPAddr
 	if len(txjson) == 0 {
 	} else if txjson, e = compact(txjson); e != nil {
 		httpErr(r.URL.Path, txjson, http.StatusBadRequest,
 			"unable to read request body", e.Error(), w)
 		return
-	} else if _, _, cp, e = readFromJSON(txjson, t.LastInvokeID); e != nil {
+	} else if cdpa, cgpa, cp, e = readFromJSON(txjson, t.LastInvokeID); e != nil {
 		httpErr(r.URL.Path, txjson, http.StatusBadRequest,
 			"unexpected JSON data", e.Error(), w)
 		return
+	}
+	if cdpa != nil {
+		t.CdPA = *cdpa
+	}
+	if cgpa != nil {
+		t.CgPA = cgpa
 	}
 
 	// Continue
@@ -395,6 +429,7 @@ func handleContinueDialogAbort(w http.ResponseWriter, r *http.Request) {
 		w.Write(rxjson)
 	}
 */
+
 func httpErr(
 	path string, txj []byte, hcode int,
 	title, detail string, w http.ResponseWriter) {
