@@ -207,10 +207,10 @@ Application Context version Fallback by HTTP response.
 Location: /mapmsg/v1/{context}/{version}
 ```
 
-## Get Status
+## Get Metrics
+Prometheus Exposition Format 0.0.4 data is returned.
 ``` sh
-GET /mapstate/v1/connection
-GET /mapstate/v1/statistics
+GET /metrics
 ```
 
 # License

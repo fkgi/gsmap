@@ -45,7 +45,7 @@ type Transaction struct {
 	ctx     gsmap.AppContext
 
 	CdPA         xua.SCCPAddr
-	CgPA         *xua.SCCPAddr
+	CgPA         xua.SCCPAddr
 	LastInvokeID int8
 }
 
@@ -54,11 +54,7 @@ func (t *Transaction) GetContext() gsmap.AppContext {
 }
 
 func (t *Transaction) send(m Message) Message {
-	cgpa := LocalGT
-	if t.CgPA != nil {
-		cgpa = *t.CgPA
-	}
-	if send(t.CdPA, cgpa, m) != nil {
+	if send(t.CdPA, t.CgPA, m) != nil {
 		return &TcAbort{dtid: t.otid, pCause: TcNoDestination}
 	}
 
@@ -99,11 +95,7 @@ func (t *Transaction) End(c ...gsmap.Component) {
 	if GetTransaction(t.otid) == nil {
 		return
 	}
-	cgpa := LocalGT
-	if t.CgPA != nil {
-		cgpa = *t.CgPA
-	}
-	send(t.CdPA, cgpa, &TcEnd{dtid: t.dtid, component: c})
+	send(t.CdPA, t.CgPA, &TcEnd{dtid: t.dtid, component: c})
 	deregister(t)
 }
 
@@ -129,21 +121,13 @@ func (t *Transaction) Continue(c ...gsmap.Component) ([]gsmap.Component, error) 
 
 // pReject transaction with TC-Abort with provider cause.
 func (t *Transaction) pReject(c Cause) {
-	cgpa := LocalGT
-	if t.CgPA != nil {
-		cgpa = *t.CgPA
-	}
-	send(t.CdPA, cgpa, &TcAbort{dtid: t.dtid, pCause: c})
+	send(t.CdPA, t.CgPA, &TcAbort{dtid: t.dtid, pCause: c})
 	deregister(t)
 }
 
 // Reject transaction with TC-Abort with user cause.
 func (t *Transaction) Reject() {
-	cgpa := LocalGT
-	if t.CgPA != nil {
-		cgpa = *t.CgPA
-	}
-	send(t.CdPA, cgpa, &TcAbort{dtid: t.dtid, uCause: &ABRT{Source: SvcUser}})
+	send(t.CdPA, t.CgPA, &TcAbort{dtid: t.dtid, uCause: &ABRT{Source: SvcUser}})
 	deregister(t)
 }
 
@@ -156,7 +140,7 @@ func (t *Transaction) Discard() {
 }
 
 // DialTC begin local initiated new transaction.
-func DialTC(ctx gsmap.AppContext, cdpa xua.SCCPAddr, cgpa *xua.SCCPAddr, handshake bool, invokes ...gsmap.Component) (t *Transaction, c []gsmap.Component, e error) {
+func DialTC(ctx gsmap.AppContext, cdpa xua.SCCPAddr, cgpa xua.SCCPAddr, handshake bool, invokes ...gsmap.Component) (t *Transaction, c []gsmap.Component, e error) {
 	t = &Transaction{
 		CdPA:    cdpa,
 		CgPA:    cgpa,
@@ -218,6 +202,7 @@ func acceptTC(msg *TcBegin, cgpa xua.SCCPAddr) {
 	t := &Transaction{
 		dtid:    msg.otid,
 		CdPA:    cgpa,
+		CgPA:    LocalGT,
 		rxStack: make(chan Message, 1)}
 	register(t)
 
@@ -267,20 +252,16 @@ func acceptTC(msg *TcBegin, cgpa xua.SCCPAddr) {
 	}
 
 	cres, dres, following := NewInvoke(t, msg.component)
-	cgpa = LocalGT
-	if t.CgPA != nil {
-		cgpa = *t.CgPA
-	}
 	switch d := dres.(type) {
 	case nil:
 		dres = &AARE{Context: t.ctx, Result: Accept, ResultSrc: SrcUsrNull}
 	case *ABRT:
-		send(t.CdPA, cgpa, &TcAbort{dtid: t.dtid, uCause: dres})
+		send(t.CdPA, t.CgPA, &TcAbort{dtid: t.dtid, uCause: dres})
 		deregister(t)
 		return
 	case *AARE:
 		if d.Result != Accept {
-			send(t.CdPA, cgpa, &TcEnd{dtid: t.dtid, dialogue: dres})
+			send(t.CdPA, t.CgPA, &TcEnd{dtid: t.dtid, dialogue: dres})
 			deregister(t)
 			return
 		}
@@ -292,11 +273,11 @@ func acceptTC(msg *TcBegin, cgpa xua.SCCPAddr) {
 	if cres == nil {
 		t.Discard()
 	} else if following == nil {
-		send(t.CdPA, cgpa, &TcEnd{
+		send(t.CdPA, t.CgPA, &TcEnd{
 			dtid:     t.dtid,
 			dialogue: dres, component: cres})
 		deregister(t)
-	} else if send(t.CdPA, cgpa,
+	} else if send(t.CdPA, t.CgPA,
 		&TcContinue{
 			otid: t.otid, dtid: t.dtid,
 			dialogue: dres, component: cres}) != nil {

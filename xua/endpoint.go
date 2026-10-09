@@ -67,6 +67,14 @@ func workerCheck() {
 	}
 }
 
+func ActiveWorkerCount() int {
+	r := minWorkers
+	a := <-activeWorkers
+	r += a
+	activeWorkers <- a
+	return r
+}
+
 type SignalingPoint struct {
 	sock     int
 	asps     chan map[int]*ASP
@@ -147,9 +155,14 @@ func NewSignalingTransferPoint(a *SCTPAddr) (se *SignalingPoint, e error) {
 func (se *SignalingPoint) handleEvent(m message) {
 	switch m := m.(type) {
 	case *NTFY:
+		if se.state == m.status {
+			return
+		}
 		se.state = m.status
 		if AsStateNotify != nil {
 			switch m.status {
+			case statusDwon:
+				AsStateNotify("down")
 			case statusInactive:
 				AsStateNotify("inactive")
 			case statusActive:
@@ -185,6 +198,23 @@ func (se *SignalingPoint) handleEvent(m message) {
 	}
 }
 
+func (se *SignalingPoint) verifyAsState() {
+	state := statusDwon
+	asps := <-se.asps
+	for _, a := range asps {
+		switch a.state.state() {
+		case "inactive":
+			if state == statusDwon {
+				state = statusInactive
+			}
+		case "active":
+			state = statusActive
+		}
+	}
+	se.asps <- asps
+	se.eventQ <- &NTFY{status: state}
+}
+
 func (se *SignalingPoint) ConnectTo(a *SCTPAddr) {
 	for {
 		if s, e := sctpConnectx(se.sock, a.rawBytes()); e == nil {
@@ -206,6 +236,8 @@ func (se *SignalingPoint) ConnectTo(a *SCTPAddr) {
 			delete(asps, s)
 			se.asps <- asps
 			sockClose(s)
+
+			se.verifyAsState()
 		} else if TraceEvent != nil {
 			TraceEvent("init", "init", "dialFailed", nil)
 		}
@@ -237,6 +269,8 @@ func (se *SignalingPoint) ListenAndServe() error {
 		delete(asps, s)
 		se.asps <- asps
 		sockClose(s)
+
+		se.verifyAsState()
 	}
 
 	for {

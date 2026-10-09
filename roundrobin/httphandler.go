@@ -44,12 +44,15 @@ func handleOutgoingDialog(w http.ResponseWriter, r *http.Request) {
 			"unexpected JSON data", "no CdPA", w)
 		return
 	}
+	if cgpa == nil {
+		cgpa = &tcap.LocalGT
+	}
 
 	n, v := getContextName(ctx)
 	traceTxDialog(n, v)
 
 	var t *tcap.Transaction
-	if t, cp, e = tcap.DialTC(ctx, *cdpa, cgpa, false, cp...); e == nil || e == io.EOF {
+	if t, cp, e = tcap.DialTC(ctx, *cdpa, *cgpa, false, cp...); e == nil || e == io.EOF {
 	} else if fb, ok := e.(tcap.FallbackError); ok {
 		if n, v := getContextName(fb.Context); n == "" || v == "" {
 			httpErr(r.URL.Path, txjson, http.StatusInternalServerError,
@@ -136,7 +139,7 @@ func handleContinueDialogDelete(w http.ResponseWriter, r *http.Request) {
 			t.CdPA = *cdpa
 		}
 		if cgpa != nil {
-			t.CgPA = cgpa
+			t.CgPA = *cgpa
 		}
 		// End (obsolate)
 		t.End(cp...)
@@ -177,7 +180,7 @@ func handleContinueDialogEnd(w http.ResponseWriter, r *http.Request) {
 		t.CdPA = *cdpa
 	}
 	if cgpa != nil {
-		t.CgPA = cgpa
+		t.CgPA = *cgpa
 	}
 
 	// End
@@ -218,7 +221,7 @@ func handleContinueDialogContinue(w http.ResponseWriter, r *http.Request) {
 		t.CdPA = *cdpa
 	}
 	if cgpa != nil {
-		t.CgPA = cgpa
+		t.CgPA = *cgpa
 	}
 
 	// Continue
@@ -288,7 +291,7 @@ func handleContinueDialog(w http.ResponseWriter, r *http.Request) {
 		t.CdPA = *cdpa
 	}
 	if cgpa != nil {
-		t.CgPA = cgpa
+		t.CgPA = *cgpa
 	}
 
 	// Continue

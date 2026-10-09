@@ -116,7 +116,7 @@ func handleIncomingDialog(t *tcap.Transaction, cp []gsmap.Component) (
 		t.CdPA = *cdpa
 	}
 	if cgpa != nil {
-		t.CgPA = cgpa
+		t.CgPA = *cgpa
 	}
 
 	traceTxHttpRequest(path, txjson, r.StatusCode, rxjson, nil)
@@ -236,7 +236,7 @@ func following(t *tcap.Transaction, cp []gsmap.Component, e error, path string) 
 			t.CdPA = *cdpa
 		}
 		if cgpa != nil {
-			t.CgPA = cgpa
+			t.CgPA = *cgpa
 		}
 
 		traceTxHttpRequest(p, txjson, r.StatusCode, rxjson, nil)

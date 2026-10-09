@@ -194,8 +194,7 @@ func main() {
 	// http.HandleFunc("POST /dialog/{id}/{action}", handleContinueDialogPost)
 	http.HandleFunc("POST /dialog/{id}", handleContinueDialog)
 	http.HandleFunc("DELETE /dialog/{id}", handleContinueDialogDelete)
-	http.HandleFunc("GET /mapstate/v1/connection", conStateHandler)
-	http.HandleFunc("GET /mapstate/v1/statistics", statsHandler)
+	http.HandleFunc("GET /metrics", metricsHandler)
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
 		traceRxHttpRequest(r.URL.Path, nil, http.StatusNotFound, nil, nil)
