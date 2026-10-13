@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -232,9 +233,16 @@ func main() {
 	log.Println("[INFO]", "server stopped")
 }
 
+func overwriteKeywords(d []byte) []byte {
+	d = bytes.ReplaceAll(d,
+		[]byte("${local_gta}"),
+		[]byte(tcap.LocalGT.GlobalTitle.String()))
+	return d
+}
+
 func readFromJSON(d []byte, defaultID int8) (cdpa, cgpa *xua.SCCPAddr, cpnt []gsmap.Component, e error) {
 	data := map[string]json.RawMessage{}
-	if e = json.Unmarshal(d, &data); e != nil {
+	if e = json.Unmarshal(overwriteKeywords(d), &data); e != nil {
 		return
 	}
 
