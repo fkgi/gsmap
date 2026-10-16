@@ -236,7 +236,7 @@ func main() {
 func overwriteKeywords(d []byte) []byte {
 	d = bytes.ReplaceAll(d,
 		[]byte("${local_gta}"),
-		[]byte(tcap.LocalGT.GlobalTitle.String()))
+		[]byte(tcap.LocalGT.GlobalTitle.Digits.String()))
 	return d
 }
 

@@ -94,17 +94,17 @@ func (sri RoutingInfoForSmArg) String() string {
 	fmt.Fprintf(buf, "\n%ssm-RP-PRI:            %t", gsmap.LogPrefix, sri.SMRPPRI)
 	fmt.Fprintf(buf, "\n%sserviceCentreAddress: %s", gsmap.LogPrefix, sri.CenterAddr)
 	if sri.Teleservice != nil {
-		fmt.Fprintf(buf, "\n%steleservice         :%x", gsmap.LogPrefix, *sri.Teleservice)
+		fmt.Fprintf(buf, "\n%steleservice:         %x", gsmap.LogPrefix, *sri.Teleservice)
 	}
 	// Extension
 	if sri.SupportGPRS {
-		fmt.Fprintf(buf, "\n%sgprsSupportIndicator:", gsmap.LogPrefix)
+		fmt.Fprintf(buf, "\n%sgprsSupportIndicator: ", gsmap.LogPrefix)
 	}
 	if sri.SMRPMTI != 0 {
-		fmt.Fprintf(buf, "\n%ssm-RP-MTI:           %s", gsmap.LogPrefix, sri.SMRPMTI)
+		fmt.Fprintf(buf, "\n%ssm-RP-MTI:            %s", gsmap.LogPrefix, sri.SMRPMTI)
 	}
 	if len(sri.SMRPSMEA) != 0 {
-		fmt.Fprintf(buf, "\n%ssm-RP-SMEA:          %s", gsmap.LogPrefix, sri.SMRPSMEA)
+		fmt.Fprintf(buf, "\n%ssm-RP-SMEA:           %s", gsmap.LogPrefix, sri.SMRPSMEA)
 	}
 	return buf.String()
 }
