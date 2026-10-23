@@ -163,6 +163,10 @@ func readSCCPAddr(buf *bytes.Reader) (a SCCPAddr, e error) {
 	if t, e = buf.ReadByte(); e != nil {
 		return
 	}
+	if t == 0 {
+		e = io.EoF
+		return
+	}
 	d := make([]byte, t)
 	if _, e = buf.Read(d); e != nil {
 		return

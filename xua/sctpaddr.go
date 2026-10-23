@@ -55,7 +55,7 @@ func (a *SCTPAddr) rawBytes() []byte {
 				// Scope_id:
 			}
 			copy(raw.Addr[:], i)
-			binary.Write(&buf, binary.BigEndian, raw)
+			binary.Write(&buf, binary.LittleEndian, raw)
 		}
 	} else {
 		raw := syscall.RawSockaddrInet4{
@@ -63,7 +63,7 @@ func (a *SCTPAddr) rawBytes() []byte {
 			Port:   p,
 		}
 		copy(raw.Addr[:], net.IPv4zero)
-		binary.Write(&buf, binary.BigEndian, raw)
+		binary.Write(&buf, binary.LittleEndian, raw)
 	}
 	return buf.Bytes()
 }

@@ -116,6 +116,9 @@ func ReadTLV(r *bytes.Buffer, tag byte) (t byte, v []byte, e error) {
 		}
 	}
 
+	if l > 65535 {
+		e = unexpectedTLV("too large value", 2)
+	}
 	v = make([]byte, l)
 	if l, e = r.Read(v); e == io.EOF {
 		e = unexpectedTLV("invalid value", 2)
