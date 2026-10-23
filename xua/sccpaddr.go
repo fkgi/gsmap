@@ -164,7 +164,7 @@ func readSCCPAddr(buf *bytes.Reader) (a SCCPAddr, e error) {
 		return
 	}
 	if t == 0 {
-		e = io.EoF
+		e = io.EOF
 		return
 	}
 	d := make([]byte, t)
