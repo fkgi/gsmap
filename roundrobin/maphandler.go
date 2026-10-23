@@ -170,8 +170,10 @@ func following(t *tcap.Transaction, cp []gsmap.Component, e error, path string) 
 
 		// Continue
 		p := path + "/continue"
-		if iv, ok := cp[0].(gsmap.Invoke); ok {
-			t.LastInvokeID = iv.GetInvokeID()
+		if len(cp) != 0 {
+			if iv, ok := cp[0].(gsmap.Invoke); ok {
+				t.LastInvokeID = iv.GetInvokeID()
+			}
 		}
 
 		var txjson, rxjson []byte
